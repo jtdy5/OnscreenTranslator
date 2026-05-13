@@ -1,0 +1,51 @@
+name: OnscreenTranslator
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget:
+    iOS: "18.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  OnscreenTranslator:
+    type: application
+    platform: iOS
+    sources:
+      - path: OnscreenTranslator/Sources
+      - path: OnscreenTranslator/Resources
+    configFiles:
+      Debug: OnscreenTranslator/Config/Secrets.xcconfig
+      Release: OnscreenTranslator/Config/Secrets.xcconfig
+    info:
+      path: OnscreenTranslator/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Onscreen Translator
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        NSPhotoLibraryUsageDescription: Select screenshots to translate them manually.
+        NSPhotoLibraryAddUsageDescription: Save translated screenshots back to your photo library.
+        GeminiAPIKey: $(GEMINI_API_KEY)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.onscreentranslator
+        DEVELOPMENT_TEAM: ""
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_PREVIEWS: YES
+        ENABLE_TESTABILITY: YES
+  OnscreenTranslatorTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: OnscreenTranslator/Tests
+    dependencies:
+      - target: OnscreenTranslator
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.onscreentranslator.tests
+        DEVELOPMENT_TEAM: ""
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OnscreenTranslator.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OnscreenTranslator
+        BUNDLE_LOADER: $(TEST_HOST)

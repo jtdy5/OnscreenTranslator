@@ -1,0 +1,9 @@
+DerivedData/
+DerivedDataSim/
+*.noindex/
+*.xcuserdata/
+xcuserdata/
+*.xcuserstate
+.DS_Store
+.claude/settings.local.json
+OnscreenTranslator/Config/Secrets.xcconfig
