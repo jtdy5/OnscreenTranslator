@@ -34,8 +34,9 @@ struct OCRService: Sendable {
                     )
                 }
 
-                let boxes = Self.deduplicate(rawBoxes)
-                continuation.resume(returning: boxes)
+                let deduped = Self.deduplicate(rawBoxes)
+                let merged = Self.mergeAdjacent(deduped)
+                continuation.resume(returning: merged)
             }
 
             request.recognitionLevel = .accurate
@@ -72,6 +73,76 @@ struct OCRService: Sendable {
             }
         }
         return kept
+    }
+
+    /// Merge boxes that look like fragments of the same line — same row, similar
+    /// height (proxy for same font size), small horizontal gap, and same detected
+    /// language. Reduces the number of separate translation calls and gives the
+    /// translator more context per chunk.
+    private static func mergeAdjacent(_ boxes: [RecognizedTextBox]) -> [RecognizedTextBox] {
+        guard boxes.count > 1 else { return boxes }
+        let sorted = boxes.sorted { lhs, rhs in
+            if abs(lhs.rect.midY - rhs.rect.midY) > min(lhs.rect.height, rhs.rect.height) * 0.6 {
+                return lhs.rect.midY < rhs.rect.midY
+            }
+            return lhs.rect.minX < rhs.rect.minX
+        }
+
+        let languages: [String?] = sorted.map { LanguageDetector.detect($0.text) }
+
+        var merged: [RecognizedTextBox] = []
+        var mergedLanguages: [String?] = []
+        for (index, box) in sorted.enumerated() {
+            let lang = languages[index]
+            guard let last = merged.last else {
+                merged.append(box)
+                mergedLanguages.append(lang)
+                continue
+            }
+            let lastLang = mergedLanguages.last ?? nil
+            if Self.shouldMerge(last, box, lastLang: lastLang, candidateLang: lang) {
+                let union = last.rect.union(box.rect)
+                merged[merged.count - 1] = RecognizedTextBox(
+                    id: last.id,
+                    text: last.text + " " + box.text,
+                    confidence: min(last.confidence, box.confidence),
+                    rect: union.integral
+                )
+                if lastLang == nil {
+                    mergedLanguages[mergedLanguages.count - 1] = lang
+                }
+            } else {
+                merged.append(box)
+                mergedLanguages.append(lang)
+            }
+        }
+        return merged
+    }
+
+    private static func shouldMerge(
+        _ a: RecognizedTextBox,
+        _ b: RecognizedTextBox,
+        lastLang: String?,
+        candidateLang: String?
+    ) -> Bool {
+        let avgHeight = (a.rect.height + b.rect.height) / 2
+        guard avgHeight > 0 else { return false }
+        // Same row: vertical centers within 60% of average height.
+        let vCenterDelta = abs(a.rect.midY - b.rect.midY)
+        guard vCenterDelta <= avgHeight * 0.6 else { return false }
+        // Similar font size: heights within 50% of each other.
+        let heightRatio = min(a.rect.height, b.rect.height) / max(a.rect.height, b.rect.height)
+        guard heightRatio >= 0.5 else { return false }
+        // Horizontal gap: ≤ ~1.4x avg height (≈ a couple of CJK chars / Latin words).
+        let gap = b.rect.minX - a.rect.maxX
+        guard gap >= -avgHeight * 0.3, gap <= avgHeight * 1.4 else { return false }
+        // If both languages were detected and they differ at the base level, keep separate.
+        if let lhs = lastLang, let rhs = candidateLang {
+            if LanguageDetector.baseCode(lhs) != LanguageDetector.baseCode(rhs) {
+                return false
+            }
+        }
+        return true
     }
 
     private static func overlapRatio(_ a: CGRect, _ b: CGRect) -> CGFloat {

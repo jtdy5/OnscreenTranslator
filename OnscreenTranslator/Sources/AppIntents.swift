@@ -27,7 +27,9 @@ struct TranslateCurrentScreenshotIntent: AppIntent {
                 model: settings.model,
                 ocrLanguages: settings.ocrLanguages,
                 apiKey: settings.apiKey,
-                maskOpacity: settings.maskOpacity
+                maskOpacity: settings.maskOpacity,
+                preferOnDeviceTranslation: settings.preferOnDeviceTranslation,
+                understoodLanguages: settings.understoodLanguages
             )
         }
 
@@ -50,22 +52,58 @@ struct TranslateCurrentScreenshotIntent: AppIntent {
             throw TranslationError.noTextFound
         }
 
+        let translations = try await translateBoxes(boxes, settings: settings)
+        let rendered = try ScreenshotRenderer().render(
+            source: working,
+            boxes: boxes,
+            translations: translations,
+            maskOpacity: settings.maskOpacity
+        )
+        return TranslationOutput(image: rendered, boxes: boxes, translations: translations)
+    }
+
+    private func translateBoxes(_ boxes: [RecognizedTextBox], settings: AppSettings) async throws -> [String] {
+        let texts = boxes.map(\.text)
+
+        let understood = settings.understoodLanguages.isEmpty
+            ? [settings.targetLanguageCode]
+            : settings.understoodLanguages
+        let toTranslate = LanguageDetector.indicesToTranslate(in: texts, understood: understood)
+        guard !toTranslate.isEmpty else { return texts }
+
+        let subset = toTranslate.map { texts[$0] }
+        let translated = try await translateSubset(subset, settings: settings)
+
+        var output = texts
+        for (offset, originalIndex) in toTranslate.enumerated() where offset < translated.count {
+            output[originalIndex] = translated[offset]
+        }
+        return output
+    }
+
+    private func translateSubset(_ texts: [String], settings: AppSettings) async throws -> [String] {
+        if settings.preferOnDeviceTranslation, #available(iOS 18.0, *) {
+            do {
+                return try await AppleTranslationService().translate(
+                    texts,
+                    targetLanguageCode: settings.targetLanguageCode
+                )
+            } catch {
+                // Fall through to cloud fallback. Apple Translation may fail when:
+                // model not installed, user cancelled the download prompt, no active
+                // window for hosting, or the language pair is unsupported.
+            }
+        }
+
         do {
-            let translations = try await TranslationService().translate(
-                boxes.map(\.text),
+            return try await TranslationService().translate(
+                texts,
                 targetLanguage: settings.targetLanguage,
                 settings: settings
             )
-            let rendered = try ScreenshotRenderer().render(
-                source: working,
-                boxes: boxes,
-                translations: translations,
-                maskOpacity: settings.maskOpacity
-            )
-            return TranslationOutput(image: rendered, boxes: boxes, translations: translations)
         } catch TranslationError.missingAPIKey {
             throw TranslationError.requestFailed(
-                "Add a Gemini (or other OpenAI-compatible) API key in Settings to use the Shortcut."
+                "Add a Gemini (or other OpenAI-compatible) API key in Settings to use the Shortcut, or enable on-device translation with the language pair installed."
             )
         }
     }

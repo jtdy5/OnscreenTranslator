@@ -16,6 +16,8 @@
 		5FAED2BBAC6BDF4AB26EBEEA /* TranslationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75BC60C773FE6D5B80B56CFF /* TranslationService.swift */; };
 		703ADBC357D8E9A6E211163B /* AppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A19A337184B71BE4FAF63991 /* AppIntents.swift */; };
 		82E49775C8D68077FD793672 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 299569F66B6162C318B05429 /* SettingsStore.swift */; };
+		A0E72764F0FFF1048807C132 /* LanguageDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73FC8E6828ACD3E7FAA7FFBA /* LanguageDetector.swift */; };
+		A3AB222651F9347DBEBF0160 /* AppleTranslationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A447EA27A49ECAAD734DE7B8 /* AppleTranslationService.swift */; };
 		AE02C1A6EF74D25006BA7371 /* IMG_4747.PNG in Resources */ = {isa = PBXBuildFile; fileRef = EB3496812E09F08D9214FB2D /* IMG_4747.PNG */; };
 		B34929FB1FDD28C0164397FA /* SupportedLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55DC114712DC29C841DC91AD /* SupportedLanguage.swift */; };
 		B78EA5B86194095FA3032984 /* TranslationHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EB53F248394B5A22D9DBFB4 /* TranslationHistory.swift */; };
@@ -50,9 +52,11 @@
 		637E50554A396F8AC1E08236 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		6D4F5789AC2A87007A5A32BC /* IMG_4746.PNG */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = IMG_4746.PNG; sourceTree = "<group>"; };
 		71F9D62A6655376ACF35E765 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		73FC8E6828ACD3E7FAA7FFBA /* LanguageDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageDetector.swift; sourceTree = "<group>"; };
 		75BC60C773FE6D5B80B56CFF /* TranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationService.swift; sourceTree = "<group>"; };
 		888AFB0758FBEBC9A2570E94 /* OCRService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRService.swift; sourceTree = "<group>"; };
 		A19A337184B71BE4FAF63991 /* AppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIntents.swift; sourceTree = "<group>"; };
+		A447EA27A49ECAAD734DE7B8 /* AppleTranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleTranslationService.swift; sourceTree = "<group>"; };
 		A8FAAD02780E176E7F5AF294 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		BE55C0D4F6AB3D44D1BD7C51 /* TranslationPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationPipeline.swift; sourceTree = "<group>"; };
 		D99DA1EC0F3A7DC1B95E164A /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
@@ -95,9 +99,11 @@
 			isa = PBXGroup;
 			children = (
 				A19A337184B71BE4FAF63991 /* AppIntents.swift */,
+				A447EA27A49ECAAD734DE7B8 /* AppleTranslationService.swift */,
 				637E50554A396F8AC1E08236 /* ContentView.swift */,
 				23FB1C1EB60EAFFA22C617CC /* ImageScaler.swift */,
 				28B66EE0A3870A7F32AE5173 /* KeychainStore.swift */,
+				73FC8E6828ACD3E7FAA7FFBA /* LanguageDetector.swift */,
 				A8FAAD02780E176E7F5AF294 /* Models.swift */,
 				888AFB0758FBEBC9A2570E94 /* OCRService.swift */,
 				361BB8BD39811DD78241A719 /* OnscreenTranslatorApp.swift */,
@@ -240,9 +246,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				703ADBC357D8E9A6E211163B /* AppIntents.swift in Sources */,
+				A3AB222651F9347DBEBF0160 /* AppleTranslationService.swift in Sources */,
 				E5D88D32BB5598293BDC60DB /* ContentView.swift in Sources */,
 				0B497BFEF441579432A41B19 /* ImageScaler.swift in Sources */,
 				D645CA22B70B425F5BE0F19D /* KeychainStore.swift in Sources */,
+				A0E72764F0FFF1048807C132 /* LanguageDetector.swift in Sources */,
 				D67A7E85CFE8726892C872D9 /* Models.swift in Sources */,
 				1300916E2211CBC64E757806 /* OCRService.swift in Sources */,
 				0C5EEBCE678CB26C88B5C6E4 /* OnscreenTranslatorApp.swift in Sources */,

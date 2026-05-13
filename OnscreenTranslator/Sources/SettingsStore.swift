@@ -31,6 +31,14 @@ final class SettingsStore: ObservableObject {
         didSet { UserDefaults.standard.set(maskOpacity, forKey: Keys.maskOpacity) }
     }
 
+    @Published var preferOnDeviceTranslation: Bool {
+        didSet { UserDefaults.standard.set(preferOnDeviceTranslation, forKey: Keys.preferOnDeviceTranslation) }
+    }
+
+    @Published var understoodLanguages: String {
+        didSet { UserDefaults.standard.set(understoodLanguages, forKey: Keys.understoodLanguages) }
+    }
+
     init() {
         targetLanguage = UserDefaults.standard.string(forKey: Keys.targetLanguage) ?? "Chinese"
         targetLanguageCode = UserDefaults.standard.string(forKey: Keys.targetLanguageCode) ?? "zh-Hans"
@@ -40,6 +48,10 @@ final class SettingsStore: ObservableObject {
         apiKey = KeychainStore.read(service: Keys.service, account: Keys.apiKey) ?? Self.bundledAPIKey() ?? ""
         let storedOpacity = UserDefaults.standard.object(forKey: Keys.maskOpacity) as? Double
         maskOpacity = storedOpacity ?? 0.88
+        let storedPreference = UserDefaults.standard.object(forKey: Keys.preferOnDeviceTranslation) as? Bool
+        preferOnDeviceTranslation = storedPreference ?? true
+        let storedUnderstood = UserDefaults.standard.string(forKey: Keys.understoodLanguages)
+        understoodLanguages = storedUnderstood ?? (UserDefaults.standard.string(forKey: Keys.targetLanguageCode) ?? "zh-Hans")
     }
 
     func snapshot() -> AppSettings {
@@ -50,8 +62,17 @@ final class SettingsStore: ObservableObject {
             model: model,
             ocrLanguages: parsedOCRLanguages,
             apiKey: apiKey,
-            maskOpacity: maskOpacity
+            maskOpacity: maskOpacity,
+            preferOnDeviceTranslation: preferOnDeviceTranslation,
+            understoodLanguages: parsedUnderstoodLanguages
         )
+    }
+
+    private var parsedUnderstoodLanguages: [String] {
+        understoodLanguages
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     nonisolated static func bundledAPIKey() -> String? {
@@ -78,11 +99,14 @@ struct AppSettings: Sendable {
     let ocrLanguages: [String]
     let apiKey: String
     let maskOpacity: Double
+    let preferOnDeviceTranslation: Bool
+    let understoodLanguages: [String]
 
     static func fromDefaults() -> AppSettings {
-        AppSettings(
+        let targetCode = UserDefaults.standard.string(forKey: Keys.targetLanguageCode) ?? "zh-Hans"
+        return AppSettings(
             targetLanguage: UserDefaults.standard.string(forKey: Keys.targetLanguage) ?? "Chinese",
-            targetLanguageCode: UserDefaults.standard.string(forKey: Keys.targetLanguageCode) ?? "zh-Hans",
+            targetLanguageCode: targetCode,
             endpoint: UserDefaults.standard.string(forKey: Keys.endpoint) ?? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
             model: UserDefaults.standard.string(forKey: Keys.model) ?? "gemini-2.5-flash",
             ocrLanguages: (UserDefaults.standard.string(forKey: Keys.ocrLanguages) ?? "th-TH,zh-Hans,en-US,ja-JP,ko-KR")
@@ -90,7 +114,12 @@ struct AppSettings: Sendable {
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty },
             apiKey: KeychainStore.read(service: Keys.service, account: Keys.apiKey) ?? SettingsStore.bundledAPIKey() ?? "",
-            maskOpacity: UserDefaults.standard.object(forKey: Keys.maskOpacity) as? Double ?? 0.88
+            maskOpacity: UserDefaults.standard.object(forKey: Keys.maskOpacity) as? Double ?? 0.88,
+            preferOnDeviceTranslation: UserDefaults.standard.object(forKey: Keys.preferOnDeviceTranslation) as? Bool ?? true,
+            understoodLanguages: (UserDefaults.standard.string(forKey: Keys.understoodLanguages) ?? targetCode)
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
         )
     }
 }
@@ -104,5 +133,7 @@ enum Keys {
     static let ocrLanguages = "ocrLanguages"
     static let apiKey = "translationAPIKey"
     static let maskOpacity = "maskOpacity"
+    static let preferOnDeviceTranslation = "preferOnDeviceTranslation"
+    static let understoodLanguages = "understoodLanguages"
     static let history = "translationHistory"
 }

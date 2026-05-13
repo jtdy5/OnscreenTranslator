@@ -186,11 +186,22 @@ private struct TranslateView: View {
             }
 
             stage = .translating
-            let translations = try await TranslationService().translate(
-                boxes.map(\.text),
-                targetLanguage: settingsSnapshot.targetLanguage,
-                settings: settingsSnapshot
-            )
+            let allTexts = boxes.map(\.text)
+            let understood = settingsSnapshot.understoodLanguages.isEmpty
+                ? [settingsSnapshot.targetLanguageCode]
+                : settingsSnapshot.understoodLanguages
+            let toTranslate = LanguageDetector.indicesToTranslate(in: allTexts, understood: understood)
+            var translations = allTexts
+            if !toTranslate.isEmpty {
+                let translated = try await TranslationService().translate(
+                    toTranslate.map { allTexts[$0] },
+                    targetLanguage: settingsSnapshot.targetLanguage,
+                    settings: settingsSnapshot
+                )
+                for (offset, originalIndex) in toTranslate.enumerated() where offset < translated.count {
+                    translations[originalIndex] = translated[offset]
+                }
+            }
 
             stage = .rendering
             let image = try ScreenshotRenderer().render(
@@ -235,6 +246,36 @@ private struct TranslateView: View {
 
 private struct SettingsView: View {
     @EnvironmentObject private var settings: SettingsStore
+
+    private var understoodLanguagesBinding: Binding<Set<String>> {
+        Binding(
+            get: {
+                Set(settings.understoodLanguages
+                    .split(separator: ",")
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty })
+            },
+            set: { codes in
+                settings.understoodLanguages = SupportedLanguage.all
+                    .map(\.code)
+                    .filter { codes.contains($0) }
+                    .joined(separator: ",")
+            }
+        )
+    }
+
+    private var understoodLanguagesSummary: String {
+        let codes = settings.understoodLanguages
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let names = codes.compactMap { code in
+            SupportedLanguage.all.first(where: { $0.code == code })?.displayName
+        }
+        guard !names.isEmpty else { return "None" }
+        if names.count <= 2 { return names.joined(separator: ", ") }
+        return "\(names.count) selected"
+    }
 
     private var ocrLanguagesBinding: Binding<Set<String>> {
         Binding(
@@ -283,6 +324,10 @@ private struct SettingsView: View {
                             Text(language.displayName).tag(language.code)
                         }
                     }
+                    Toggle("Fast on-device for Shortcut", isOn: $settings.preferOnDeviceTranslation)
+                    Text("When triggered from Shortcuts, try Apple's on-device translation first (much faster). Falls back to the cloud model below if the language pair isn't installed or the call fails.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
                     Text("Defaults to Gemini 2.5 Flash via Google's OpenAI-compatible endpoint. Bring your own key from aistudio.google.com.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -293,6 +338,26 @@ private struct SettingsView: View {
                         .textInputAutocapitalization(.never)
                     SecureField("API key", text: $settings.apiKey)
                         .textInputAutocapitalization(.never)
+                }
+
+                Section("Languages You Understand") {
+                    NavigationLink {
+                        LanguagePicker(
+                            selection: understoodLanguagesBinding,
+                            title: "Understood Languages"
+                        )
+                    } label: {
+                        HStack {
+                            Text("Skip translating")
+                            Spacer()
+                            Text(understoodLanguagesSummary)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                    Text("Text detected in these languages stays in the original. Only other languages get translated into the target language.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section("OCR") {
@@ -328,6 +393,37 @@ private struct SettingsView: View {
             }
             .navigationTitle("Settings")
         }
+    }
+}
+
+private struct LanguagePicker: View {
+    @Binding var selection: Set<String>
+    let title: String
+
+    var body: some View {
+        List {
+            ForEach(SupportedLanguage.all) { language in
+                Button {
+                    if selection.contains(language.code) {
+                        selection.remove(language.code)
+                    } else {
+                        selection.insert(language.code)
+                    }
+                } label: {
+                    HStack {
+                        Text(language.displayName)
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        if selection.contains(language.code) {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(.tint)
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
