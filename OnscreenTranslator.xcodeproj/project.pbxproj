@@ -21,6 +21,7 @@
 		AE02C1A6EF74D25006BA7371 /* IMG_4747.PNG in Resources */ = {isa = PBXBuildFile; fileRef = EB3496812E09F08D9214FB2D /* IMG_4747.PNG */; };
 		B34929FB1FDD28C0164397FA /* SupportedLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55DC114712DC29C841DC91AD /* SupportedLanguage.swift */; };
 		B78EA5B86194095FA3032984 /* TranslationHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EB53F248394B5A22D9DBFB4 /* TranslationHistory.swift */; };
+		C45AF7DD477807B03C2DD421 /* IMG_4780.PNG in Resources */ = {isa = PBXBuildFile; fileRef = F73996101F323D5D85F1A6A3 /* IMG_4780.PNG */; };
 		D645CA22B70B425F5BE0F19D /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28B66EE0A3870A7F32AE5173 /* KeychainStore.swift */; };
 		D67A7E85CFE8726892C872D9 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8FAAD02780E176E7F5AF294 /* Models.swift */; };
 		E5D88D32BB5598293BDC60DB /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 637E50554A396F8AC1E08236 /* ContentView.swift */; };
@@ -39,7 +40,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		12E22FFD83DAC8A84DCD8DF6 /* OnscreenTranslator.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OnscreenTranslator.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		12E22FFD83DAC8A84DCD8DF6 /* OnscreenTranslator.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = OnscreenTranslator.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1714539EFB9970EB4286C422 /* TranslationPipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationPipelineTests.swift; sourceTree = "<group>"; };
 		18F2445ED595B846A64D312C /* ScreenshotRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotRenderer.swift; sourceTree = "<group>"; };
 		23FB1C1EB60EAFFA22C617CC /* ImageScaler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageScaler.swift; sourceTree = "<group>"; };
@@ -50,7 +51,7 @@
 		53AD16205226C8917519B7BC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		55DC114712DC29C841DC91AD /* SupportedLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportedLanguage.swift; sourceTree = "<group>"; };
 		637E50554A396F8AC1E08236 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		6D4F5789AC2A87007A5A32BC /* IMG_4746.PNG */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = IMG_4746.PNG; sourceTree = "<group>"; };
+		6D4F5789AC2A87007A5A32BC /* IMG_4746.PNG */ = {isa = PBXFileReference; path = IMG_4746.PNG; sourceTree = "<group>"; };
 		71F9D62A6655376ACF35E765 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		73FC8E6828ACD3E7FAA7FFBA /* LanguageDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageDetector.swift; sourceTree = "<group>"; };
 		75BC60C773FE6D5B80B56CFF /* TranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationService.swift; sourceTree = "<group>"; };
@@ -60,7 +61,8 @@
 		A8FAAD02780E176E7F5AF294 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		BE55C0D4F6AB3D44D1BD7C51 /* TranslationPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationPipeline.swift; sourceTree = "<group>"; };
 		D99DA1EC0F3A7DC1B95E164A /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
-		EB3496812E09F08D9214FB2D /* IMG_4747.PNG */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = IMG_4747.PNG; sourceTree = "<group>"; };
+		EB3496812E09F08D9214FB2D /* IMG_4747.PNG */ = {isa = PBXFileReference; path = IMG_4747.PNG; sourceTree = "<group>"; };
+		F73996101F323D5D85F1A6A3 /* IMG_4780.PNG */ = {isa = PBXFileReference; path = IMG_4780.PNG; sourceTree = "<group>"; };
 		FC90936BB56CD98E8D38683D /* OnscreenTranslatorTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = OnscreenTranslatorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -89,6 +91,7 @@
 			children = (
 				6D4F5789AC2A87007A5A32BC /* IMG_4746.PNG */,
 				EB3496812E09F08D9214FB2D /* IMG_4747.PNG */,
+				F73996101F323D5D85F1A6A3 /* IMG_4780.PNG */,
 				1714539EFB9970EB4286C422 /* TranslationPipelineTests.swift */,
 			);
 			name = Tests;
@@ -187,6 +190,9 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					0292E223D7415AD0DB9EDB9E = {
+						DevelopmentTeam = "";
+					};
 					ED4F1BA96083662DAAD54FF5 = {
 						DevelopmentTeam = "";
 					};
@@ -219,6 +225,7 @@
 			files = (
 				E7C1BC37D195382EF99162A5 /* IMG_4746.PNG in Resources */,
 				AE02C1A6EF74D25006BA7371 /* IMG_4747.PNG in Resources */,
+				C45AF7DD477807B03C2DD421 /* IMG_4780.PNG in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -363,7 +370,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = K834WW3WC9;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				ENABLE_TESTABILITY = YES;
 				INFOPLIST_FILE = OnscreenTranslator/Resources/Info.plist;
@@ -401,7 +408,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = K834WW3WC9;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				ENABLE_TESTABILITY = YES;
 				INFOPLIST_FILE = OnscreenTranslator/Resources/Info.plist;

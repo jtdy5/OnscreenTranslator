@@ -28,10 +28,11 @@ struct ScreenshotRenderer: Sendable {
 
                 let base = box.rect.insetBy(dx: -2, dy: -4)
                 let downwardCeiling = neighborCeilings[index]
+                let targetFontSize = max(10, min(40, box.rect.height * 0.75))
                 let padded = expandedRect(
                     base: base,
                     for: trimmed,
-                    minFontSize: 9,
+                    targetFontSize: targetFontSize,
                     canvas: canvas,
                     downwardCeiling: downwardCeiling
                 )
@@ -45,7 +46,8 @@ struct ScreenshotRenderer: Sendable {
                     trimmed,
                     in: padded.insetBy(dx: 4, dy: 2),
                     context: context.cgContext,
-                    foreground: palette.foreground
+                    foreground: palette.foreground,
+                    targetFontSize: targetFontSize
                 )
             }
         }
@@ -54,17 +56,16 @@ struct ScreenshotRenderer: Sendable {
     private func expandedRect(
         base: CGRect,
         for text: String,
-        minFontSize: CGFloat,
+        targetFontSize: CGFloat,
         canvas: CGRect,
         downwardCeiling: CGFloat
     ) -> CGRect {
-        // Keep horizontal position/width identical to the source OCR box so the
-        // translated text never drifts sideways into neighbouring UI elements.
-        // If the translation needs more room than `minFontSize` can fit on one
-        // line within the original width, grow the box downward to allow
-        // wrapping — never sideways, and never past the next OCR box below.
+        // Horizontal width/position is locked to the source OCR box — Chinese
+        // is wider per glyph than Thai/Latin, so we grow the rect *downward*
+        // until the translation fits at the original visual font size. Cap by
+        // the neighbouring OCR box's top edge so we never paint over it.
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: minFontSize, weight: .semibold)
+            .font: UIFont.systemFont(ofSize: targetFontSize, weight: .semibold)
         ]
         let measured = text.boundingRect(
             with: CGSize(width: max(1, base.width - 8), height: .greatestFiniteMagnitude),
@@ -78,7 +79,7 @@ struct ScreenshotRenderer: Sendable {
         }
         let absoluteCeiling = min(downwardCeiling, canvas.maxY)
         let availableHeight = max(base.height, absoluteCeiling - base.minY)
-        let maxHeight = min(base.height * 3.0, availableHeight)
+        let maxHeight = min(base.height * 5.0, availableHeight)
         let finalHeight = min(neededHeight, maxHeight)
         let expanded = CGRect(
             x: base.minX,
@@ -108,13 +109,22 @@ struct ScreenshotRenderer: Sendable {
         }
     }
 
-    private func draw(_ text: String, in rect: CGRect, context: CGContext, foreground: UIColor) {
+    private func draw(
+        _ text: String,
+        in rect: CGRect,
+        context: CGContext,
+        foreground: UIColor,
+        targetFontSize: CGFloat
+    ) {
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .center
         paragraph.lineBreakMode = .byWordWrapping
 
-        let minFont: CGFloat = 9
-        var fontSize = max(minFont, min(40, rect.height * 0.75))
+        // Start at the target font size (pinned to the original OCR box height
+        // so the translation visually matches the source UI). Only shrink if
+        // wrapping still overflows the expanded rect.
+        let minFont: CGFloat = 8
+        var fontSize = max(minFont, min(40, targetFontSize))
         var attributes: [NSAttributedString.Key: Any] = [
             .font: UIFont.systemFont(ofSize: fontSize, weight: .semibold),
             .foregroundColor: foreground,
@@ -142,9 +152,6 @@ struct ScreenshotRenderer: Sendable {
             attributes: attributes,
             context: nil
         )
-        // If even the minimum font doesn't fit, switch to tail truncation so we
-        // get a visible ellipsis instead of text getting silently chopped at
-        // the rect edge.
         if measured.height > rect.height || measured.width > rect.width {
             paragraph.lineBreakMode = .byTruncatingTail
             attributes[.paragraphStyle] = paragraph
@@ -181,10 +188,14 @@ struct ScreenshotRenderer: Sendable {
         let height = image.height
         let totalBytes = CFDataGetLength(data)
 
-        let minX = max(0, Int(originalBox.minX))
-        let maxX = min(width - 1, Int(originalBox.maxX))
-        let minY = max(0, Int(originalBox.minY))
-        let maxY = min(height - 1, Int(originalBox.maxY))
+        // Inset the sampling area slightly so we don't grab card borders or
+        // anti-aliased edge pixels — those bias both the fg and bg clusters.
+        let inset: CGFloat = max(2, min(originalBox.width, originalBox.height) * 0.08)
+        let sample = originalBox.insetBy(dx: inset, dy: inset)
+        let minX = max(0, Int(sample.minX))
+        let maxX = min(width - 1, Int(sample.maxX))
+        let minY = max(0, Int(sample.minY))
+        let maxY = min(height - 1, Int(sample.maxY))
         guard maxX > minX, maxY > minY else {
             return ColorPalette(foreground: .black, background: .white)
         }

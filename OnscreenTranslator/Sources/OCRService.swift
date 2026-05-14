@@ -18,12 +18,22 @@ struct OCRService: Sendable {
                 let size = CGSize(width: cgImage.width, height: cgImage.height)
                 let rawBoxes = observations.compactMap { observation -> RecognizedTextBox? in
                     guard let candidate = observation.topCandidates(1).first,
-                          candidate.confidence >= 0.2 else {
+                          candidate.confidence >= 0.35 else {
                         return nil
                     }
 
                     let rect = Self.pixelRect(from: observation.boundingBox, imageSize: size)
                     guard rect.width > 8, rect.height > 6 else {
+                        return nil
+                    }
+
+                    let trimmed = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
+                    // Drop boxes whose text is almost entirely punctuation/symbol noise
+                    // (typical signature of icons or dotted dividers misread as text).
+                    let letterDigitCount = trimmed.unicodeScalars.filter {
+                        CharacterSet.letters.contains($0) || CharacterSet.decimalDigits.contains($0)
+                    }.count
+                    guard letterDigitCount * 3 >= trimmed.count else {
                         return nil
                     }
 
