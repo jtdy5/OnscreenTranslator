@@ -216,11 +216,14 @@ struct OCRService: Sendable {
         let gap = b.rect.minX - a.rect.maxX
         let upperBound = max(medianGap * 2, avgHeight * 0.6)
         guard gap >= -avgHeight * 0.3, gap <= upperBound else { return false }
-        // Same language (when both are detected).
-        if let lhs = lastLang, let rhs = candidateLang,
-           LanguageDetector.baseCode(lhs) != LanguageDetector.baseCode(rhs) {
-            return false
-        }
+        // NB: we intentionally do NOT require same language here. Mixed-script
+        // lines are the common case for chat / app UI ("ร้าน Saver" or
+        // "KFC - Wachirathamsatit"); enforcing same-language splits a single
+        // visual line into fragments that the translator then handles in
+        // isolation — exactly the symptom we're trying to remove. Language
+        // matching is still enforced for vertical paragraph merging.
+        _ = lastLang
+        _ = candidateLang
         return true
     }
 

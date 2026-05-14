@@ -111,27 +111,59 @@ enum LanguageDetector {
     }
 
     /// Returns indices of `texts` that should be translated, given a set of language codes
-    /// the user already understands. Texts whose detected language matches an understood
-    /// language (compared by base code) are skipped. Texts that look like numerics / URLs /
-    /// handles are also skipped (see `shouldSkipTranslation`). Texts where detection fails
-    /// fall through to "translate" — safer than leaving foreign script on screen.
+    /// the user already understands.
     ///
-    /// `allowedDetectionLanguages` constrains the NL recognizer (see `detect`).
-    /// When non-empty, only those languages can be chosen as the dominant
-    /// language, preventing spurious "Indonesian" / "Malay" classifications of
-    /// Latin-script brand names when the user only cares about English/Thai/CJK.
+    /// The decision is **script-based**, not NL-classification-based. A text is
+    /// translated iff it contains at least one letter character whose script is
+    /// NOT in the understood-script set (after the pure-numeric / URL / handle
+    /// filter). Rationale: NL classification of mixed-language lines is
+    /// fragile — a Thai line containing an English brand name ("ร้าน Saver")
+    /// is often classified as English, and would otherwise be skipped, leaving
+    /// the Thai parts on screen untranslated. Looking at scripts directly
+    /// catches every line that has *any* glyph the user can't read.
+    ///
+    /// Pure-Latin content stays untranslated when the user understands a Latin
+    /// language (English). Pure-Han content stays untranslated when the user
+    /// understands Chinese. Anything with mixed-in foreign-script glyphs goes
+    /// through the translator.
     static func indicesToTranslate(
         in texts: [String],
         understood: [String],
         allowedDetectionLanguages: [String] = []
     ) -> [Int] {
-        let understoodBases = Set(understood.map(baseCode))
-        let allowed = allowedDetectionLanguages.isEmpty ? understood : allowedDetectionLanguages
+        _ = allowedDetectionLanguages   // accepted for API compatibility; unused
+        let understoodScripts = Set(understood.map { expectedScript(forLanguageCode: $0) })
         return texts.indices.filter { i in
-            if shouldSkipTranslation(texts[i]) { return false }
-            guard let detected = detect(texts[i], allowed: allowed) else { return true }
-            return !understoodBases.contains(baseCode(detected))
+            let text = texts[i]
+            if shouldSkipTranslation(text) { return false }
+            return Self.containsScriptOutside(understoodScripts, in: text)
         }
+    }
+
+    /// True if any letter / CJK glyph in `text` belongs to a script outside the
+    /// understood set. Cyrillic when the user only reads Latin+Han, Thai when
+    /// the user reads Latin+Han, etc. Non-letter characters (digits, symbols,
+    /// punctuation) are ignored. Han / Hiragana / Katakana are folded together
+    /// for "CJK" purposes, so Japanese text is correctly classified as foreign
+    /// for a Chinese-only user.
+    private static func containsScriptOutside(_ understood: Set<Script>, in text: String) -> Bool {
+        // Treat understood scripts plus their CJK siblings as known: someone
+        // who understands Chinese will also recognise Han glyphs that appear
+        // in Japanese, and vice versa for kana variants.
+        var allowed = understood
+        let cjk: Set<Script> = [.han, .hiragana, .katakana]
+        if !allowed.isDisjoint(with: cjk) {
+            allowed.formUnion(cjk)
+        }
+        for scalar in text.unicodeScalars {
+            guard CharacterSet.letters.contains(scalar) || isCJK(scalar) else { continue }
+            let script = scriptOf(scalar)
+            if script == .unknown { continue }
+            if !allowed.contains(script) {
+                return true
+            }
+        }
+        return false
     }
 
     /// Dominant Unicode script of a string, used to detect when an LLM output is
