@@ -11,7 +11,8 @@ struct AppleTranslationService {
     /// is unsupported are returned unchanged.
     func translate(
         _ texts: [String],
-        targetLanguageCode: String
+        targetLanguageCode: String,
+        allowedSourceLanguages: [String] = []
     ) async throws -> [String] {
         let targetBase = LanguageDetector.baseCode(targetLanguageCode)
         // Detect each text's source language and skip those that already match
@@ -21,7 +22,7 @@ struct AppleTranslationService {
         // Thai paragraph would spawn an entire Korean session.
         let sourcePerIndex: [String?] = texts.map { text in
             if LanguageDetector.shouldSkipTranslation(text) { return nil }
-            guard let detected = LanguageDetector.detect(text) else { return nil }
+            guard let detected = LanguageDetector.detect(text, allowed: allowedSourceLanguages) else { return nil }
             if LanguageDetector.baseCode(detected) == targetBase { return nil }
             let evidence = text.unicodeScalars.filter {
                 CharacterSet.letters.contains($0) ||

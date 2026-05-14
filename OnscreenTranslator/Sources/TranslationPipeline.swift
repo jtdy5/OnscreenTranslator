@@ -53,11 +53,19 @@ enum BoxTranslator {
         let understood = settings.understoodLanguages.isEmpty
             ? [settings.targetLanguageCode]
             : settings.understoodLanguages
-        let toTranslate = LanguageDetector.indicesToTranslate(in: texts, understood: understood)
+        // Constrain NL detection to languages we actually care about so a Latin
+        // brand name doesn't get classified as Indonesian / Tagalog / etc. and
+        // route to an unrelated translation model.
+        let allowedDetectionLanguages = relevantLanguageCodes(for: settings)
+        let toTranslate = LanguageDetector.indicesToTranslate(
+            in: texts,
+            understood: understood,
+            allowedDetectionLanguages: allowedDetectionLanguages
+        )
         guard !toTranslate.isEmpty else { return (texts, nil) }
 
         let subset = toTranslate.map { texts[$0] }
-        let translated = try await translateSubset(subset, settings: settings)
+        let translated = try await translateSubset(subset, settings: settings, allowedDetectionLanguages: allowedDetectionLanguages)
 
         var output = texts
         var unchangedCount = 0
@@ -78,12 +86,17 @@ enum BoxTranslator {
     }
 
     @MainActor
-    private static func translateSubset(_ texts: [String], settings: AppSettings) async throws -> [String] {
+    private static func translateSubset(
+        _ texts: [String],
+        settings: AppSettings,
+        allowedDetectionLanguages: [String]
+    ) async throws -> [String] {
         if settings.preferOnDeviceTranslation, #available(iOS 18.0, *) {
             do {
                 return try await AppleTranslationService().translate(
                     texts,
-                    targetLanguageCode: settings.targetLanguageCode
+                    targetLanguageCode: settings.targetLanguageCode,
+                    allowedSourceLanguages: allowedDetectionLanguages
                 )
             } catch {
                 // Fall through to cloud fallback. Apple Translation may fail when:
@@ -103,5 +116,28 @@ enum BoxTranslator {
                 "Add a Gemini (or other OpenAI-compatible) API key in Settings to use the Shortcut, or enable on-device translation with the language pair installed."
             )
         }
+    }
+
+    /// Build the set of language codes that NL detection is allowed to choose
+    /// among for this screenshot — the union of the user's understood list,
+    /// the target language, and the OCR script hints. Languages outside this
+    /// set are never assigned to a box, which prevents NL from labeling short
+    /// Latin tokens as Indonesian / Malay / Tagalog (all valid NL outputs but
+    /// almost never what the user means).
+    static func relevantLanguageCodes(for settings: AppSettings) -> [String] {
+        var seen = Set<String>()
+        var ordered: [String] = []
+        func push(_ code: String) {
+            let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            let base = LanguageDetector.baseCode(trimmed)
+            if seen.insert(base).inserted {
+                ordered.append(base)
+            }
+        }
+        push(settings.targetLanguageCode)
+        settings.understoodLanguages.forEach(push)
+        settings.ocrLanguages.forEach(push)
+        return ordered
     }
 }

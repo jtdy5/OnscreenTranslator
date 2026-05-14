@@ -13,7 +13,14 @@ enum LanguageDetector {
     /// or nil if detection fails or the text is too short / has no letters worth classifying.
     /// Lowers the minimum length to 1 when the text contains CJK code points — a single
     /// Chinese character is enough to classify reliably and worth treating as "understood".
-    static func detect(_ text: String) -> String? {
+    ///
+    /// `allowed` (when non-empty) constrains `NLLanguageRecognizer` to those
+    /// language codes. Without constraints NL happily classifies a Latin-script
+    /// brand name like "Wachirathamsatit" as Indonesian / Malay / Tagalog —
+    /// languages that look identical to English on short inputs. Pass the
+    /// user's understood languages + target + OCR hints here so detection only
+    /// chooses from languages that are actually relevant for this screenshot.
+    static func detect(_ text: String, allowed: [String] = []) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         let hasCJK = trimmed.unicodeScalars.contains { Self.isCJK($0) }
@@ -24,6 +31,10 @@ enum LanguageDetector {
             }
         }
         let recognizer = NLLanguageRecognizer()
+        let constraints = Self.nlLanguages(for: allowed)
+        if !constraints.isEmpty {
+            recognizer.languageConstraints = constraints
+        }
         recognizer.processString(trimmed)
         if let language = recognizer.dominantLanguage {
             return language.rawValue
@@ -34,6 +45,28 @@ enum LanguageDetector {
             return "zh"
         }
         return nil
+    }
+
+    /// Map raw BCP-47-ish codes to `NLLanguage` values. Handles common region
+    /// suffixes (`th-TH`, `zh-Hans-CN`, `en-US`) and silently drops anything
+    /// `NLLanguage` doesn't recognize.
+    private static func nlLanguages(for codes: [String]) -> [NLLanguage] {
+        var seen = Set<NLLanguage>()
+        var result: [NLLanguage] = []
+        for code in codes {
+            let candidates = [code, baseCode(code)]
+            for candidate in candidates {
+                let lang = NLLanguage(rawValue: candidate)
+                // NLLanguage init never returns nil; it returns `.undetermined`
+                // for unrecognized strings. Filter those out explicitly.
+                if lang != .undetermined, !seen.contains(lang) {
+                    seen.insert(lang)
+                    result.append(lang)
+                    break
+                }
+            }
+        }
+        return result
     }
 
     static func baseCode(_ code: String) -> String {
@@ -82,11 +115,21 @@ enum LanguageDetector {
     /// language (compared by base code) are skipped. Texts that look like numerics / URLs /
     /// handles are also skipped (see `shouldSkipTranslation`). Texts where detection fails
     /// fall through to "translate" — safer than leaving foreign script on screen.
-    static func indicesToTranslate(in texts: [String], understood: [String]) -> [Int] {
+    ///
+    /// `allowedDetectionLanguages` constrains the NL recognizer (see `detect`).
+    /// When non-empty, only those languages can be chosen as the dominant
+    /// language, preventing spurious "Indonesian" / "Malay" classifications of
+    /// Latin-script brand names when the user only cares about English/Thai/CJK.
+    static func indicesToTranslate(
+        in texts: [String],
+        understood: [String],
+        allowedDetectionLanguages: [String] = []
+    ) -> [Int] {
         let understoodBases = Set(understood.map(baseCode))
+        let allowed = allowedDetectionLanguages.isEmpty ? understood : allowedDetectionLanguages
         return texts.indices.filter { i in
             if shouldSkipTranslation(texts[i]) { return false }
-            guard let detected = detect(texts[i]) else { return true }
+            guard let detected = detect(texts[i], allowed: allowed) else { return true }
             return !understoodBases.contains(baseCode(detected))
         }
     }
