@@ -7,110 +7,110 @@ import UIKit
 @available(iOS 18.0, *)
 @MainActor
 struct AppleTranslationService {
+    /// Translate the texts the caller has already decided need translating.
+    /// Texts are grouped by detected source language so a screenshot with
+    /// Thai + Japanese + English all gets translated correctly. Each language
+    /// group runs its own `TranslationSession`; texts whose source language
+    /// is unsupported are returned unchanged.
     func translate(
         _ texts: [String],
-        targetLanguageCode: String,
-        sourceLanguageHint: String? = nil
+        targetLanguageCode: String
     ) async throws -> [String] {
-        let targetBase = Self.baseCode(of: targetLanguageCode)
-
-        let perBoxLanguage: [String?] = texts.map { text in
-            guard Self.needsTranslation(text) else { return nil }
-            return Self.detectLanguage(of: text)
+        let targetBase = LanguageDetector.baseCode(targetLanguageCode)
+        // Detect each text's source language and skip those that already match
+        // the target or look like pure numerics/URLs/handles.
+        let sourcePerIndex: [String?] = texts.map { text in
+            if LanguageDetector.shouldSkipTranslation(text) { return nil }
+            guard let detected = LanguageDetector.detect(text) else { return nil }
+            if LanguageDetector.baseCode(detected) == targetBase { return nil }
+            return detected
         }
 
-        let sessionSourceCode: String?
-        if let hint = sourceLanguageHint, Self.baseCode(of: hint) != targetBase {
-            sessionSourceCode = hint
-        } else {
-            sessionSourceCode = Self.dominantNonTargetLanguage(perBoxLanguage, targetBase: targetBase)
+        // Group indices by source language base code.
+        var groups: [String: [Int]] = [:]
+        for (i, src) in sourcePerIndex.enumerated() {
+            guard let src else { continue }
+            groups[LanguageDetector.baseCode(src), default: []].append(i)
         }
-        guard let sessionSourceCode else {
+        guard !groups.isEmpty else {
             throw TranslationError.appleLanguageUnavailable(
-                "No box needs translating — all detected text already matches the target language."
-            )
-        }
-        let sessionSourceBase = Self.baseCode(of: sessionSourceCode)
-
-        let translatableIndices = perBoxLanguage.indices.filter { index in
-            guard let lang = perBoxLanguage[index] else { return false }
-            return Self.baseCode(of: lang) == sessionSourceBase
-        }
-        guard !translatableIndices.isEmpty else {
-            throw TranslationError.appleLanguageUnavailable(
-                "No box matched the chosen source language."
+                "Nothing to translate — every input either matched the target or looked like a passthrough token."
             )
         }
 
-        let target = Locale.Language(identifier: targetLanguageCode)
-        let source = Locale.Language(identifier: sessionSourceCode)
-
+        var output = texts
+        var translatedAtLeastOne = false
+        var unsupportedLanguages: [String] = []
         let availability = LanguageAvailability()
-        let status = await availability.status(from: source, to: target)
-        switch status {
-        case .unsupported:
-            throw TranslationError.appleLanguageUnavailable(
-                "Apple Translation does not support \(sessionSourceCode) → \(targetLanguageCode)."
-            )
-        case .installed, .supported:
-            break
-        @unknown default:
-            throw TranslationError.appleLanguageUnavailable("Unknown Apple Translation availability state.")
-        }
+        let target = Locale.Language(identifier: targetLanguageCode)
 
-        let configuration = TranslationSession.Configuration(source: source, target: target)
-        let session = try await acquireSession(configuration: configuration)
+        for (sourceCode, indices) in groups {
+            let source = Locale.Language(identifier: sourceCode)
+            let status = await availability.status(from: source, to: target)
+            switch status {
+            case .unsupported:
+                unsupportedLanguages.append(sourceCode)
+                continue
+            case .installed, .supported:
+                break
+            @unknown default:
+                unsupportedLanguages.append(sourceCode)
+                continue
+            }
 
-        if status == .supported {
-            try await session.prepareTranslation()
-        }
+            let configuration = TranslationSession.Configuration(source: source, target: target)
+            let session: TranslationSession
+            do {
+                session = try await acquireSession(configuration: configuration)
+            } catch {
+                unsupportedLanguages.append(sourceCode)
+                continue
+            }
 
-        let requests = translatableIndices.map { index in
-            TranslationSession.Request(sourceText: texts[index], clientIdentifier: String(index))
-        }
-        let responses = try await session.translations(from: requests)
+            if status == .supported {
+                do { try await session.prepareTranslation() } catch {
+                    unsupportedLanguages.append(sourceCode)
+                    continue
+                }
+            }
 
-        var byIndex: [Int: String] = [:]
-        for response in responses {
-            if let id = response.clientIdentifier, let index = Int(id) {
-                byIndex[index] = response.targetText
+            let requests = indices.map { index in
+                TranslationSession.Request(sourceText: texts[index], clientIdentifier: String(index))
+            }
+            let responses: [TranslationSession.Response]
+            do {
+                responses = try await session.translations(from: requests)
+            } catch {
+                unsupportedLanguages.append(sourceCode)
+                continue
+            }
+
+            for response in responses {
+                if let id = response.clientIdentifier, let index = Int(id) {
+                    output[index] = response.targetText
+                    translatedAtLeastOne = true
+                }
             }
         }
-        return texts.enumerated().map { index, original in
-            byIndex[index] ?? original
+
+        if !translatedAtLeastOne {
+            throw TranslationError.appleLanguageUnavailable(
+                unsupportedLanguages.isEmpty
+                    ? "Apple Translation produced no output."
+                    : "Apple Translation does not support: \(unsupportedLanguages.joined(separator: ", ")) → \(targetLanguageCode)."
+            )
         }
+        return output
     }
 
-    private static func needsTranslation(_ text: String) -> Bool {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count >= 2 else { return false }
-        return trimmed.unicodeScalars.contains { CharacterSet.letters.contains($0) }
-    }
-
-    private static func detectLanguage(of text: String) -> String? {
-        let recognizer = NLLanguageRecognizer()
-        recognizer.processString(text)
-        return recognizer.dominantLanguage?.rawValue
-    }
-
-    private static func dominantNonTargetLanguage(_ languages: [String?], targetBase: String) -> String? {
-        var counts: [String: Int] = [:]
-        for case let lang? in languages where baseCode(of: lang) != targetBase {
-            counts[lang, default: 0] += 1
-        }
-        return counts.max { $0.value < $1.value }?.key
-    }
-
-    private static func baseCode(of code: String) -> String {
-        code.split(whereSeparator: { $0 == "-" || $0 == "_" }).first.map(String.init)?.lowercased() ?? code.lowercased()
-    }
+    // MARK: - Session acquisition
 
     private func acquireSession(
         configuration: TranslationSession.Configuration
     ) async throws -> TranslationSession {
         guard let window = Self.activeWindow() else {
             throw TranslationError.appleLanguageUnavailable(
-                "No active app window available to host Apple Translation."
+                "No active app window available to host Apple Translation. Open the app to the foreground at least once to install the translation model."
             )
         }
 
@@ -132,14 +132,19 @@ struct AppleTranslationService {
             window.addSubview(host.view)
         }
 
-        let session: TranslationSession
+        defer {
+            host.willMove(toParent: nil)
+            host.view.removeFromSuperview()
+            host.removeFromParent()
+        }
+
         do {
-            session = try await withThrowingTaskGroup(of: TranslationSession.self) { group in
+            return try await withThrowingTaskGroup(of: TranslationSession.self) { group in
                 group.addTask { await holder.wait() }
                 group.addTask {
-                    try await Task.sleep(nanoseconds: 5_000_000_000)
+                    try await Task.sleep(nanoseconds: 12_000_000_000)
                     throw TranslationError.appleLanguageUnavailable(
-                        "Apple Translation session did not start within 5 seconds."
+                        "Apple Translation session did not start within 12 seconds."
                     )
                 }
                 let result = try await group.next()!
@@ -147,13 +152,8 @@ struct AppleTranslationService {
                 return result
             }
         } catch {
-            host.willMove(toParent: nil)
-            host.view.removeFromSuperview()
-            host.removeFromParent()
             throw error
         }
-
-        return session
     }
 
     private static func activeWindow() -> UIWindow? {

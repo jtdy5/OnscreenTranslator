@@ -6,12 +6,18 @@ struct RecognizedTextBox: Identifiable, Codable, Sendable {
     let text: String
     let confidence: Float
     let rect: CGRect
+    /// Tight bounding rects around the actual glyphs within `rect`, when Vision
+    /// reports them. Used by the renderer to sample foreground colors from
+    /// inside the glyphs and background from the gaps — far more robust on
+    /// gradient / photo backgrounds than sampling the whole box.
+    let glyphRects: [CGRect]
 
-    init(id: UUID = UUID(), text: String, confidence: Float, rect: CGRect) {
+    init(id: UUID = UUID(), text: String, confidence: Float, rect: CGRect, glyphRects: [CGRect] = []) {
         self.id = id
         self.text = text
         self.confidence = confidence
         self.rect = rect
+        self.glyphRects = glyphRects
     }
 }
 

@@ -39,9 +39,13 @@ struct TranslateCurrentScreenshotIntent: AppIntent {
         }
 
         let file = IntentFile(data: data, filename: "translated-screenshot.png", type: .png)
+        var dialog = "Translated \(output.boxes.count) text regions to \(settings.targetLanguage)."
+        if let note = output.partialFailureNote {
+            dialog += " " + note
+        }
         return .result(
             value: file,
-            dialog: "Translated \(output.boxes.count) text regions to \(settings.targetLanguage)."
+            dialog: IntentDialog(stringLiteral: dialog)
         )
     }
 
@@ -52,60 +56,19 @@ struct TranslateCurrentScreenshotIntent: AppIntent {
             throw TranslationError.noTextFound
         }
 
-        let translations = try await translateBoxes(boxes, settings: settings)
+        let result = try await BoxTranslator.translate(boxes: boxes, settings: settings)
         let rendered = try ScreenshotRenderer().render(
             source: working,
             boxes: boxes,
-            translations: translations,
+            translations: result.translations,
             maskOpacity: settings.maskOpacity
         )
-        return TranslationOutput(image: rendered, boxes: boxes, translations: translations)
-    }
-
-    private func translateBoxes(_ boxes: [RecognizedTextBox], settings: AppSettings) async throws -> [String] {
-        let texts = boxes.map(\.text)
-
-        let understood = settings.understoodLanguages.isEmpty
-            ? [settings.targetLanguageCode]
-            : settings.understoodLanguages
-        let toTranslate = LanguageDetector.indicesToTranslate(in: texts, understood: understood)
-        guard !toTranslate.isEmpty else { return texts }
-
-        let subset = toTranslate.map { texts[$0] }
-        let translated = try await translateSubset(subset, settings: settings)
-
-        var output = texts
-        for (offset, originalIndex) in toTranslate.enumerated() where offset < translated.count {
-            output[originalIndex] = translated[offset]
-        }
-        return output
-    }
-
-    private func translateSubset(_ texts: [String], settings: AppSettings) async throws -> [String] {
-        if settings.preferOnDeviceTranslation, #available(iOS 18.0, *) {
-            do {
-                return try await AppleTranslationService().translate(
-                    texts,
-                    targetLanguageCode: settings.targetLanguageCode
-                )
-            } catch {
-                // Fall through to cloud fallback. Apple Translation may fail when:
-                // model not installed, user cancelled the download prompt, no active
-                // window for hosting, or the language pair is unsupported.
-            }
-        }
-
-        do {
-            return try await TranslationService().translate(
-                texts,
-                targetLanguage: settings.targetLanguage,
-                settings: settings
-            )
-        } catch TranslationError.missingAPIKey {
-            throw TranslationError.requestFailed(
-                "Add a Gemini (or other OpenAI-compatible) API key in Settings to use the Shortcut, or enable on-device translation with the language pair installed."
-            )
-        }
+        return TranslationOutput(
+            image: rendered,
+            boxes: boxes,
+            translations: result.translations,
+            partialFailureNote: result.note
+        )
     }
 }
 

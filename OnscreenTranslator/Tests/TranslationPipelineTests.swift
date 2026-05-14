@@ -51,6 +51,48 @@ final class TranslationPipelineTests: XCTestCase {
         try await runOfflineRender(named: "IMG_4780")
     }
 
+    // MARK: - LanguageDetector unit tests
+
+    func testLanguageDetectorSkipsNumericsAndHandles() {
+        XCTAssertTrue(LanguageDetector.shouldSkipTranslation("฿164"))
+        XCTAssertTrue(LanguageDetector.shouldSkipTranslation("123,456"))
+        XCTAssertTrue(LanguageDetector.shouldSkipTranslation("50%"))
+        XCTAssertTrue(LanguageDetector.shouldSkipTranslation("https://example.com/path"))
+        XCTAssertTrue(LanguageDetector.shouldSkipTranslation("user@example.com"))
+        XCTAssertTrue(LanguageDetector.shouldSkipTranslation("#hashtag"))
+        XCTAssertTrue(LanguageDetector.shouldSkipTranslation("@handle"))
+        XCTAssertFalse(LanguageDetector.shouldSkipTranslation("Hello world"))
+        XCTAssertFalse(LanguageDetector.shouldSkipTranslation("สวัสดี"))
+        XCTAssertFalse(LanguageDetector.shouldSkipTranslation("总金额 ฿164"))
+    }
+
+    func testLanguageDetectorDominantScript() {
+        XCTAssertEqual(LanguageDetector.dominantScript(of: "Hello world"), .latin)
+        XCTAssertEqual(LanguageDetector.dominantScript(of: "你好世界"), .han)
+        XCTAssertEqual(LanguageDetector.dominantScript(of: "สวัสดีครับ"), .thai)
+        XCTAssertEqual(LanguageDetector.dominantScript(of: "안녕하세요"), .hangul)
+        XCTAssertEqual(LanguageDetector.dominantScript(of: "Привет мир"), .cyrillic)
+        // Mixed-script outputs get a special category so the LLM retry isn't
+        // triggered for legitimately bilingual labels.
+        XCTAssertEqual(LanguageDetector.dominantScript(of: "Visa 5513"), .latin)
+        XCTAssertEqual(LanguageDetector.dominantScript(of: "总金额"), .han)
+    }
+
+    func testLanguageDetectorRecognizesSingleCJK() {
+        // Single CJK character is enough to skip translation when the user
+        // understands Chinese.
+        XCTAssertNotNil(LanguageDetector.detect("总"))
+        XCTAssertNil(LanguageDetector.detect("a"))
+    }
+
+    func testLanguageDetectorExpectedScript() {
+        XCTAssertEqual(LanguageDetector.expectedScript(forLanguageCode: "zh-Hans"), .han)
+        XCTAssertEqual(LanguageDetector.expectedScript(forLanguageCode: "en"), .latin)
+        XCTAssertEqual(LanguageDetector.expectedScript(forLanguageCode: "th"), .thai)
+        XCTAssertEqual(LanguageDetector.expectedScript(forLanguageCode: "ko"), .hangul)
+        XCTAssertEqual(LanguageDetector.expectedScript(forLanguageCode: "ar"), .arabic)
+    }
+
     /// Real Apple Translation pipeline against IMG_4780. Requires the Thai→Chinese
     /// model to be installed on the simulator (Settings → General → Language &
     /// Region → Translation Languages, or first-time use will prompt to download).

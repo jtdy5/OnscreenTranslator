@@ -1,7 +1,11 @@
 import Foundation
 
 struct TranslationService: Sendable {
-    private static let batchSize = 25
+    /// Cap on the total source characters per LLM call. We pack indices into
+    /// batches that don't exceed this number; paragraph-merged boxes with very
+    /// long combined text get their own batch instead of bloating a group of
+    /// 25 short items.
+    private static let maxCharsPerBatch = 4000
 
     func translate(_ texts: [String], targetLanguage: String, settings: AppSettings) async throws -> [String] {
         guard !settings.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -20,13 +24,14 @@ struct TranslationService: Sendable {
             into: &output,
             sourceTexts: texts,
             targetLanguage: targetLanguage,
+            targetLanguageCode: settings.targetLanguageCode,
             settings: settings,
             url: url,
             isRetry: false
         )
 
         let stuckIndices = translatableIndices.filter { index in
-            Self.containsForeignScript(output[index], targetLanguage: targetLanguage)
+            Self.outputStillInSourceScript(output[index], targetLanguageCode: settings.targetLanguageCode)
         }
         if !stuckIndices.isEmpty {
             try await runChunkedTranslation(
@@ -34,6 +39,7 @@ struct TranslationService: Sendable {
                 into: &output,
                 sourceTexts: texts,
                 targetLanguage: targetLanguage,
+                targetLanguageCode: settings.targetLanguageCode,
                 settings: settings,
                 url: url,
                 isRetry: true
@@ -47,11 +53,12 @@ struct TranslationService: Sendable {
         into output: inout [String],
         sourceTexts: [String],
         targetLanguage: String,
+        targetLanguageCode: String,
         settings: AppSettings,
         url: URL,
         isRetry: Bool
     ) async throws {
-        let chunks = indices.chunked(into: Self.batchSize)
+        let chunks = Self.chunkByCharacterBudget(indices: indices, sourceTexts: sourceTexts, budget: Self.maxCharsPerBatch)
         let results = try await withThrowingTaskGroup(of: (Int, [String]).self) { group -> [(Int, [String])] in
             for (chunkIndex, chunk) in chunks.enumerated() {
                 let texts = chunk.map { sourceTexts[$0] }
@@ -83,18 +90,44 @@ struct TranslationService: Sendable {
         }
     }
 
-    private static func containsForeignScript(_ text: String, targetLanguage: String) -> Bool {
-        let isChineseTarget = targetLanguage.lowercased().contains("chinese") || targetLanguage.contains("中文")
-        for scalar in text.unicodeScalars {
-            if (0x0E00...0x0E7F).contains(scalar.value) { return true }
-            if (0x1100...0x11FF).contains(scalar.value) || (0xAC00...0xD7AF).contains(scalar.value) {
-                if isChineseTarget { return true }
-            }
-            if (0x3040...0x30FF).contains(scalar.value) {
-                if isChineseTarget { return true }
+    /// Pack indices into chunks whose combined source-text length stays under
+    /// `budget`. A single item that already exceeds the budget gets its own
+    /// chunk — we still send it (the upstream LLM may truncate, which is fine;
+    /// silently dropping it would be worse).
+    private static func chunkByCharacterBudget(indices: [Int], sourceTexts: [String], budget: Int) -> [[Int]] {
+        var chunks: [[Int]] = []
+        var current: [Int] = []
+        var currentLen = 0
+        for i in indices {
+            let length = sourceTexts[i].count
+            if !current.isEmpty, currentLen + length > budget {
+                chunks.append(current)
+                current = [i]
+                currentLen = length
+            } else {
+                current.append(i)
+                currentLen += length
             }
         }
-        return false
+        if !current.isEmpty { chunks.append(current) }
+        return chunks
+    }
+
+    /// True when the LLM's output is still dominated by a script that doesn't
+    /// match the user's target language — script-agnostic so it works for any
+    /// (source, target) pair.
+    private static func outputStillInSourceScript(_ text: String, targetLanguageCode: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 2 else { return false }
+        let observed = LanguageDetector.dominantScript(of: trimmed)
+        let expected = LanguageDetector.expectedScript(forLanguageCode: targetLanguageCode)
+        if observed == .unknown || observed == .mixed { return false }
+        // Han/Hiragana/Katakana are all acceptable for Chinese/Japanese targets.
+        let cjkScripts: Set<LanguageDetector.Script> = [.han, .hiragana, .katakana]
+        if cjkScripts.contains(expected), cjkScripts.contains(observed) {
+            return false
+        }
+        return observed != expected
     }
 
     private static func needsTranslation(_ text: String) -> Bool {
@@ -225,15 +258,6 @@ private struct TranslationInput: Encodable {
         let t: String
     }
     let items: [Item]
-}
-
-private extension Array {
-    func chunked(into size: Int) -> [[Element]] {
-        guard size > 0 else { return [self] }
-        return stride(from: 0, to: count, by: size).map {
-            Array(self[$0..<Swift.min($0 + size, count)])
-        }
-    }
 }
 
 private struct TranslationResult: Decodable {

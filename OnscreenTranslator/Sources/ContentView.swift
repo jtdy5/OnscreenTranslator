@@ -93,7 +93,7 @@ private struct TranslateView: View {
             .onChange(of: selectedItem) { _, newValue in
                 Task { await loadImage(from: newValue) }
             }
-            .alert("Translation failed", isPresented: errorBinding) {
+            .alert("Translation", isPresented: errorBinding) {
                 Button("OK", role: .cancel) { errorMessage = nil }
             } message: {
                 Text(errorMessage ?? "")
@@ -186,28 +186,13 @@ private struct TranslateView: View {
             }
 
             stage = .translating
-            let allTexts = boxes.map(\.text)
-            let understood = settingsSnapshot.understoodLanguages.isEmpty
-                ? [settingsSnapshot.targetLanguageCode]
-                : settingsSnapshot.understoodLanguages
-            let toTranslate = LanguageDetector.indicesToTranslate(in: allTexts, understood: understood)
-            var translations = allTexts
-            if !toTranslate.isEmpty {
-                let translated = try await TranslationService().translate(
-                    toTranslate.map { allTexts[$0] },
-                    targetLanguage: settingsSnapshot.targetLanguage,
-                    settings: settingsSnapshot
-                )
-                for (offset, originalIndex) in toTranslate.enumerated() where offset < translated.count {
-                    translations[originalIndex] = translated[offset]
-                }
-            }
+            let result = try await BoxTranslator.translate(boxes: boxes, settings: settingsSnapshot)
 
             stage = .rendering
             let image = try ScreenshotRenderer().render(
                 source: working,
                 boxes: boxes,
-                translations: translations,
+                translations: result.translations,
                 maskOpacity: settingsSnapshot.maskOpacity
             )
             outputImage = image
@@ -217,6 +202,9 @@ private struct TranslateView: View {
                 targetLanguage: settingsSnapshot.targetLanguage,
                 recognizedCount: boxes.count
             )
+            if let note = result.note {
+                errorMessage = note
+            }
         } catch {
             errorMessage = Self.userMessage(for: error)
         }
