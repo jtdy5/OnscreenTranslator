@@ -27,6 +27,7 @@
 		E5D88D32BB5598293BDC60DB /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 637E50554A396F8AC1E08236 /* ContentView.swift */; };
 		E7C1BC37D195382EF99162A5 /* IMG_4746.PNG in Resources */ = {isa = PBXBuildFile; fileRef = 6D4F5789AC2A87007A5A32BC /* IMG_4746.PNG */; };
 		E9A1CC6133DBF770B98975CE /* TranslationPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE55C0D4F6AB3D44D1BD7C51 /* TranslationPipeline.swift */; };
+		EB93DD8B3547A06E253F16CF /* AppleTranslationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80FB3A73D7E5400662BFCEC6 /* AppleTranslationCoordinator.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -55,6 +56,7 @@
 		71F9D62A6655376ACF35E765 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		73FC8E6828ACD3E7FAA7FFBA /* LanguageDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageDetector.swift; sourceTree = "<group>"; };
 		75BC60C773FE6D5B80B56CFF /* TranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationService.swift; sourceTree = "<group>"; };
+		80FB3A73D7E5400662BFCEC6 /* AppleTranslationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleTranslationCoordinator.swift; sourceTree = "<group>"; };
 		888AFB0758FBEBC9A2570E94 /* OCRService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRService.swift; sourceTree = "<group>"; };
 		A19A337184B71BE4FAF63991 /* AppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIntents.swift; sourceTree = "<group>"; };
 		A447EA27A49ECAAD734DE7B8 /* AppleTranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleTranslationService.swift; sourceTree = "<group>"; };
@@ -102,6 +104,7 @@
 			isa = PBXGroup;
 			children = (
 				A19A337184B71BE4FAF63991 /* AppIntents.swift */,
+				80FB3A73D7E5400662BFCEC6 /* AppleTranslationCoordinator.swift */,
 				A447EA27A49ECAAD734DE7B8 /* AppleTranslationService.swift */,
 				637E50554A396F8AC1E08236 /* ContentView.swift */,
 				23FB1C1EB60EAFFA22C617CC /* ImageScaler.swift */,
@@ -253,6 +256,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				703ADBC357D8E9A6E211163B /* AppIntents.swift in Sources */,
+				EB93DD8B3547A06E253F16CF /* AppleTranslationCoordinator.swift in Sources */,
 				A3AB222651F9347DBEBF0160 /* AppleTranslationService.swift in Sources */,
 				E5D88D32BB5598293BDC60DB /* ContentView.swift in Sources */,
 				0B497BFEF441579432A41B19 /* ImageScaler.swift in Sources */,

@@ -10,6 +10,7 @@ struct OnscreenTranslatorApp: App {
             ContentView()
                 .environmentObject(settings)
                 .environmentObject(history)
+                .mountAppleTranslationHost()
         }
     }
 }

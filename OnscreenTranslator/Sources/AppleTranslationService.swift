@@ -1,8 +1,5 @@
 import Foundation
-import NaturalLanguage
-import SwiftUI
 import Translation
-import UIKit
 
 @available(iOS 18.0, *)
 @MainActor
@@ -105,50 +102,22 @@ struct AppleTranslationService {
 
     // MARK: - Session lifecycle
 
-    /// Run `body` with a live `TranslationSession`. The session is hosted in a
-    /// dedicated auxiliary `UIWindow` so it doesn't collide with the app's
-    /// root `UIHostingController` (SwiftUI explicitly refuses to drive
-    /// `.translationTask` for a hosting controller embedded inside another
-    /// hosting controller, which was causing `holder.wait()` to hang until
-    /// the 12 s timeout). The window is released only after `body` returns,
-    /// so `session.translations(from:)` runs while the host view is still
-    /// attached — tearing it down before that point also hangs the session.
+    /// Run `body` with a live `TranslationSession`. The session is created by
+    /// `AppleTranslationCoordinator`, which mounts `.translationTask` inside
+    /// the app's actual SwiftUI view hierarchy. This is the only hosting
+    /// approach that works reliably — nested `UIHostingController` chains
+    /// and auxiliary `UIWindow`s both have edge cases where SwiftUI silently
+    /// refuses to run the task and `holder.wait()` hangs forever.
     private func withSession<T>(
         configuration: TranslationSession.Configuration,
         body: (TranslationSession) async throws -> T
     ) async throws -> T {
-        guard let scene = Self.activeWindowScene() else {
-            throw TranslationError.appleLanguageUnavailable(
-                "No active app window scene available to host Apple Translation. Open the app to the foreground at least once to install the translation model."
-            )
-        }
-
-        let holder = SessionHolder()
-        let host = UIHostingController(
-            rootView: TranslationSessionHost(configuration: configuration) { session in
-                holder.deliver(session)
-            }
-        )
-        host.view.isUserInteractionEnabled = false
-        host.view.backgroundColor = .clear
-
-        let auxWindow = UIWindow(windowScene: scene)
-        auxWindow.windowLevel = UIWindow.Level.normal - 1
-        auxWindow.rootViewController = host
-        auxWindow.alpha = 0
-        auxWindow.isHidden = false
-
-        defer {
-            auxWindow.isHidden = true
-            auxWindow.rootViewController = nil
-        }
-
         let session = try await withThrowingTaskGroup(of: TranslationSession.self) { group in
-            group.addTask { await holder.wait() }
+            group.addTask { await AppleTranslationCoordinator.shared.requestSession(configuration: configuration) }
             group.addTask {
-                try await Task.sleep(nanoseconds: 12_000_000_000)
+                try await Task.sleep(nanoseconds: 15_000_000_000)
                 throw TranslationError.appleLanguageUnavailable(
-                    "Apple Translation session did not start within 12 seconds."
+                    "Apple Translation session did not start within 15 seconds. Open the app to the foreground at least once so the host view is mounted."
                 )
             }
             let result = try await group.next()!
@@ -156,58 +125,5 @@ struct AppleTranslationService {
             return result
         }
         return try await body(session)
-    }
-
-    private static func activeWindowScene() -> UIWindowScene? {
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        return scenes.first { $0.activationState == .foregroundActive }
-            ?? scenes.first { $0.activationState == .foregroundInactive }
-            ?? scenes.first
-    }
-}
-
-@available(iOS 18.0, *)
-private final class SessionHolder: @unchecked Sendable {
-    private var session: TranslationSession?
-    private var continuation: CheckedContinuation<TranslationSession, Never>?
-    private let lock = NSLock()
-
-    func deliver(_ session: TranslationSession) {
-        lock.lock()
-        if let continuation {
-            self.continuation = nil
-            lock.unlock()
-            continuation.resume(returning: session)
-        } else {
-            self.session = session
-            lock.unlock()
-        }
-    }
-
-    func wait() async -> TranslationSession {
-        await withCheckedContinuation { continuation in
-            lock.lock()
-            if let session {
-                self.session = nil
-                lock.unlock()
-                continuation.resume(returning: session)
-            } else {
-                self.continuation = continuation
-                lock.unlock()
-            }
-        }
-    }
-}
-
-@available(iOS 18.0, *)
-private struct TranslationSessionHost: View {
-    let configuration: TranslationSession.Configuration
-    let onSession: (TranslationSession) -> Void
-
-    var body: some View {
-        Color.clear
-            .translationTask(configuration) { session in
-                onSession(session)
-            }
     }
 }
