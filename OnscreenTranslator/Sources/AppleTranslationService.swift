@@ -18,11 +18,20 @@ struct AppleTranslationService {
     ) async throws -> [String] {
         let targetBase = LanguageDetector.baseCode(targetLanguageCode)
         // Detect each text's source language and skip those that already match
-        // the target or look like pure numerics/URLs/handles.
+        // the target or look like pure numerics/URLs/handles. Require at least
+        // 2 letters/CJK glyphs of evidence in the text before honouring the
+        // detected language — otherwise one stray Korean glyph mixed into a
+        // Thai paragraph would spawn an entire Korean session.
         let sourcePerIndex: [String?] = texts.map { text in
             if LanguageDetector.shouldSkipTranslation(text) { return nil }
             guard let detected = LanguageDetector.detect(text) else { return nil }
             if LanguageDetector.baseCode(detected) == targetBase { return nil }
+            let evidence = text.unicodeScalars.filter {
+                CharacterSet.letters.contains($0) ||
+                (0x3040...0x9FFF).contains($0.value) ||
+                (0xAC00...0xD7AF).contains($0.value)
+            }.count
+            guard evidence >= 2 else { return nil }
             return detected
         }
 
@@ -59,27 +68,18 @@ struct AppleTranslationService {
             }
 
             let configuration = TranslationSession.Configuration(source: source, target: target)
-            let session: TranslationSession
-            do {
-                session = try await acquireSession(configuration: configuration)
-            } catch {
-                unsupportedLanguages.append(sourceCode)
-                continue
-            }
-
-            if status == .supported {
-                do { try await session.prepareTranslation() } catch {
-                    unsupportedLanguages.append(sourceCode)
-                    continue
-                }
-            }
-
             let requests = indices.map { index in
                 TranslationSession.Request(sourceText: texts[index], clientIdentifier: String(index))
             }
+
             let responses: [TranslationSession.Response]
             do {
-                responses = try await session.translations(from: requests)
+                responses = try await withSession(configuration: configuration) { session in
+                    if status == .supported {
+                        try await session.prepareTranslation()
+                    }
+                    return try await session.translations(from: requests)
+                }
             } catch {
                 unsupportedLanguages.append(sourceCode)
                 continue
@@ -103,14 +103,23 @@ struct AppleTranslationService {
         return output
     }
 
-    // MARK: - Session acquisition
+    // MARK: - Session lifecycle
 
-    private func acquireSession(
-        configuration: TranslationSession.Configuration
-    ) async throws -> TranslationSession {
-        guard let window = Self.activeWindow() else {
+    /// Run `body` with a live `TranslationSession`. The session is hosted in a
+    /// dedicated auxiliary `UIWindow` so it doesn't collide with the app's
+    /// root `UIHostingController` (SwiftUI explicitly refuses to drive
+    /// `.translationTask` for a hosting controller embedded inside another
+    /// hosting controller, which was causing `holder.wait()` to hang until
+    /// the 12 s timeout). The window is released only after `body` returns,
+    /// so `session.translations(from:)` runs while the host view is still
+    /// attached — tearing it down before that point also hangs the session.
+    private func withSession<T>(
+        configuration: TranslationSession.Configuration,
+        body: (TranslationSession) async throws -> T
+    ) async throws -> T {
+        guard let scene = Self.activeWindowScene() else {
             throw TranslationError.appleLanguageUnavailable(
-                "No active app window available to host Apple Translation. Open the app to the foreground at least once to install the translation model."
+                "No active app window scene available to host Apple Translation. Open the app to the foreground at least once to install the translation model."
             )
         }
 
@@ -121,48 +130,39 @@ struct AppleTranslationService {
             }
         )
         host.view.isUserInteractionEnabled = false
-        host.view.isHidden = true
-        host.view.frame = CGRect(x: 0, y: 0, width: 1, height: 1)
+        host.view.backgroundColor = .clear
 
-        if let root = window.rootViewController {
-            root.addChild(host)
-            root.view.addSubview(host.view)
-            host.didMove(toParent: root)
-        } else {
-            window.addSubview(host.view)
-        }
+        let auxWindow = UIWindow(windowScene: scene)
+        auxWindow.windowLevel = UIWindow.Level.normal - 1
+        auxWindow.rootViewController = host
+        auxWindow.alpha = 0
+        auxWindow.isHidden = false
 
         defer {
-            host.willMove(toParent: nil)
-            host.view.removeFromSuperview()
-            host.removeFromParent()
+            auxWindow.isHidden = true
+            auxWindow.rootViewController = nil
         }
 
-        do {
-            return try await withThrowingTaskGroup(of: TranslationSession.self) { group in
-                group.addTask { await holder.wait() }
-                group.addTask {
-                    try await Task.sleep(nanoseconds: 12_000_000_000)
-                    throw TranslationError.appleLanguageUnavailable(
-                        "Apple Translation session did not start within 12 seconds."
-                    )
-                }
-                let result = try await group.next()!
-                group.cancelAll()
-                return result
+        let session = try await withThrowingTaskGroup(of: TranslationSession.self) { group in
+            group.addTask { await holder.wait() }
+            group.addTask {
+                try await Task.sleep(nanoseconds: 12_000_000_000)
+                throw TranslationError.appleLanguageUnavailable(
+                    "Apple Translation session did not start within 12 seconds."
+                )
             }
-        } catch {
-            throw error
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
         }
+        return try await body(session)
     }
 
-    private static func activeWindow() -> UIWindow? {
+    private static func activeWindowScene() -> UIWindowScene? {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        let active = scenes.first { $0.activationState == .foregroundActive }
+        return scenes.first { $0.activationState == .foregroundActive }
             ?? scenes.first { $0.activationState == .foregroundInactive }
             ?? scenes.first
-        guard let scene = active else { return nil }
-        return scene.windows.first(where: \.isKeyWindow) ?? scene.windows.first
     }
 }
 
