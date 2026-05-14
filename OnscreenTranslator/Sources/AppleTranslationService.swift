@@ -71,12 +71,11 @@ struct AppleTranslationService {
 
             let responses: [TranslationSession.Response]
             do {
-                responses = try await withSession(configuration: configuration) { session in
-                    if status == .supported {
-                        try await session.prepareTranslation()
-                    }
-                    return try await session.translations(from: requests)
-                }
+                responses = try await runBatch(
+                    configuration: configuration,
+                    requests: requests,
+                    prepare: status == .supported
+                )
             } catch {
                 unsupportedLanguages.append(sourceCode)
                 continue
@@ -100,30 +99,35 @@ struct AppleTranslationService {
         return output
     }
 
-    // MARK: - Session lifecycle
+    // MARK: - Session batch
 
-    /// Run `body` with a live `TranslationSession`. The session is created by
-    /// `AppleTranslationCoordinator`, which mounts `.translationTask` inside
-    /// the app's actual SwiftUI view hierarchy. This is the only hosting
-    /// approach that works reliably — nested `UIHostingController` chains
-    /// and auxiliary `UIWindow`s both have edge cases where SwiftUI silently
-    /// refuses to run the task and `holder.wait()` hangs forever.
-    private func withSession<T>(
+    /// Run a translation batch through SwiftUI's `.translationTask` host
+    /// (mounted on the app's root view by `AppleTranslationCoordinator`). The
+    /// `TranslationSession` is used only inside the `.translationTask` closure
+    /// — required by the framework, which fatal-errors if the session is
+    /// touched after that closure returns.
+    private func runBatch(
         configuration: TranslationSession.Configuration,
-        body: (TranslationSession) async throws -> T
-    ) async throws -> T {
-        let session = try await withThrowingTaskGroup(of: TranslationSession.self) { group in
-            group.addTask { await AppleTranslationCoordinator.shared.requestSession(configuration: configuration) }
+        requests: [TranslationSession.Request],
+        prepare: Bool
+    ) async throws -> [TranslationSession.Response] {
+        try await withThrowingTaskGroup(of: [TranslationSession.Response].self) { group in
+            group.addTask { @MainActor in
+                try await AppleTranslationCoordinator.shared.translateBatch(
+                    configuration: configuration,
+                    requests: requests,
+                    prepare: prepare
+                )
+            }
             group.addTask {
                 try await Task.sleep(nanoseconds: 15_000_000_000)
                 throw TranslationError.appleLanguageUnavailable(
-                    "Apple Translation session did not start within 15 seconds. Open the app to the foreground at least once so the host view is mounted."
+                    "Apple Translation did not respond within 15 seconds. Open the app to the foreground at least once so the host view is mounted."
                 )
             }
             let result = try await group.next()!
             group.cancelAll()
             return result
         }
-        return try await body(session)
     }
 }
