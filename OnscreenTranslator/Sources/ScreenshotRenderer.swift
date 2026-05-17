@@ -24,7 +24,11 @@ struct ScreenshotRenderer: Sendable {
 
             for (index, (box, translation)) in zip(boxes, translations).enumerated() {
                 let trimmed = translation.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty, trimmed != box.text else { continue }
+                // Translation succeeded when we got back something non-empty
+                // that differs from the source. Otherwise we still draw the
+                // mask (so the source can't bleed through), but skip the text
+                // — there's nothing meaningful to put on top.
+                let hasTranslation = !trimmed.isEmpty && trimmed != box.text
 
                 // Pad vertically enough to swallow ascenders/descenders and
                 // diacritics (Thai vowel marks, Devanagari matras) that sit
@@ -34,14 +38,16 @@ struct ScreenshotRenderer: Sendable {
                 let downwardCeiling = downwardCeilings[index]
                 let upwardFloor = upwardFloors[index]
                 let targetFontSize = min(box.rect.height * 0.82, 34)
-                let padded = expandedRect(
-                    base: base,
-                    for: trimmed,
-                    targetFontSize: targetFontSize,
-                    canvas: canvas,
-                    downwardCeiling: downwardCeiling,
-                    upwardFloor: upwardFloor
-                )
+                let padded = hasTranslation
+                    ? expandedRect(
+                        base: base,
+                        for: trimmed,
+                        targetFontSize: targetFontSize,
+                        canvas: canvas,
+                        downwardCeiling: downwardCeiling,
+                        upwardFloor: upwardFloor
+                    )
+                    : base.intersection(canvas)
                 let palette = sampledPalette(from: cgImage, box: box)
                 let path = UIBezierPath(roundedRect: padded, cornerRadius: min(8, padded.height / 4))
                 // Always opaque: anything below 1.0 lets the original glyphs
@@ -49,6 +55,7 @@ struct ScreenshotRenderer: Sendable {
                 palette.background.setFill()
                 path.fill()
 
+                guard hasTranslation else { continue }
                 draw(
                     trimmed,
                     in: padded.insetBy(dx: 4, dy: 2),
