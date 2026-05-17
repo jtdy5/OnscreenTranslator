@@ -243,15 +243,29 @@ struct OCRService: Sendable {
 
         var merged: [RecognizedTextBox] = []
         var mergedLanguages: [String?] = []
+        // Track the height of the LAST appended single line in each merged
+        // paragraph. The union-rect height grows as we append more lines and
+        // becomes a poor reference for "is the next line the same font size?"
+        // — compare against the last line we accepted instead.
+        var mergedLastLineHeights: [CGFloat] = []
         for (index, box) in sorted.enumerated() {
             let lang = languages[index]
             guard let last = merged.last else {
                 merged.append(box)
                 mergedLanguages.append(lang)
+                mergedLastLineHeights.append(box.rect.height)
                 continue
             }
             let lastLang = mergedLanguages.last ?? nil
-            if Self.shouldJoinParagraph(last, box, medianLineSpacing: lineSpacing, lastLang: lastLang, candidateLang: lang) {
+            let referenceHeight = mergedLastLineHeights[mergedLastLineHeights.count - 1]
+            if Self.shouldJoinParagraph(
+                last,
+                b: box,
+                referenceLineHeight: referenceHeight,
+                medianLineSpacing: lineSpacing,
+                lastLang: lastLang,
+                candidateLang: lang
+            ) {
                 let union = last.rect.union(box.rect)
                 merged[merged.count - 1] = RecognizedTextBox(
                     id: last.id,
@@ -263,9 +277,11 @@ struct OCRService: Sendable {
                 if lastLang == nil {
                     mergedLanguages[mergedLanguages.count - 1] = lang
                 }
+                mergedLastLineHeights[mergedLastLineHeights.count - 1] = box.rect.height
             } else {
                 merged.append(box)
                 mergedLanguages.append(lang)
+                mergedLastLineHeights.append(box.rect.height)
             }
         }
         return merged
@@ -273,12 +289,16 @@ struct OCRService: Sendable {
 
     private static func shouldJoinParagraph(
         _ a: RecognizedTextBox,
-        _ b: RecognizedTextBox,
+        b: RecognizedTextBox,
+        referenceLineHeight: CGFloat,
         medianLineSpacing: CGFloat?,
         lastLang: String?,
         candidateLang: String?
     ) -> Bool {
-        let avgHeight = (a.rect.height + b.rect.height) / 2
+        // Use the LAST LINE's height (not the merged union height) so a tall
+        // multi-line paragraph A doesn't reject a short single-line B that
+        // belongs to the same paragraph.
+        let avgHeight = (referenceLineHeight + b.rect.height) / 2
         guard avgHeight > 0 else { return false }
         // Next line must be below the current paragraph (allow tiny overlap).
         guard b.rect.minY >= a.rect.maxY - avgHeight * 0.3 else { return false }
@@ -296,7 +316,7 @@ struct OCRService: Sendable {
         // scripts with diacritics — a Thai line with stacked vowel marks
         // can be 60% taller than its neighbour at the same font size. 0.5
         // still catches headline-vs-body transitions (those are usually 2×+).
-        let heightRatio = min(a.rect.height, b.rect.height) / max(a.rect.height, b.rect.height)
+        let heightRatio = min(referenceLineHeight, b.rect.height) / max(referenceLineHeight, b.rect.height)
         guard heightRatio >= 0.5 else { return false }
         // Horizontal overlap fraction relative to the narrower line.
         let hOverlap = min(a.rect.maxX, b.rect.maxX) - max(a.rect.minX, b.rect.minX)
