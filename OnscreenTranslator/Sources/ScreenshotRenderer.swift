@@ -270,7 +270,7 @@ struct ScreenshotRenderer: Sendable {
             maxPtr.deallocate()
             minPtr.deallocate()
         }
-        alignmentPtr.pointee = .center
+        alignmentPtr.pointee = .left
         maxPtr.pointee = tightHeight
         minPtr.pointee = tightHeight
         let settings = [
