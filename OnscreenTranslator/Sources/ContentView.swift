@@ -192,7 +192,8 @@ private struct TranslateView: View {
             let image = try ScreenshotRenderer().render(
                 source: working,
                 boxes: boxes,
-                translations: result.translations
+                translations: result.translations,
+                skippedIndices: result.skipped
             )
             outputImage = image
             try history.add(

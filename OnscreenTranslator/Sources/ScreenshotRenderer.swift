@@ -1,10 +1,19 @@
 import UIKit
 
 struct ScreenshotRenderer: Sendable {
+    /// Render the translated overlay onto `image`.
+    ///
+    /// - Parameter skippedIndices: boxes that were intentionally left
+    ///   untranslated (e.g. detected as a language the user already
+    ///   understands). These get no mask at all — the source pixels show
+    ///   through unchanged. Boxes outside this set are always masked, even
+    ///   when translation came back identical to the source (treat as a
+    ///   silent translation failure rather than letting the source bleed).
     func render(
         source image: UIImage,
         boxes: [RecognizedTextBox],
-        translations: [String]
+        translations: [String],
+        skippedIndices: Set<Int> = []
     ) throws -> UIImage {
         guard boxes.count == translations.count, let cgImage = image.cgImage else {
             throw TranslationError.invalidResponse
@@ -23,6 +32,7 @@ struct ScreenshotRenderer: Sendable {
             image.draw(in: CGRect(origin: .zero, size: size))
 
             for (index, (box, translation)) in zip(boxes, translations).enumerated() {
+                if skippedIndices.contains(index) { continue }
                 let trimmed = translation.trimmingCharacters(in: .whitespacesAndNewlines)
                 // Translation succeeded when we got back something non-empty
                 // that differs from the source. Otherwise we still draw the

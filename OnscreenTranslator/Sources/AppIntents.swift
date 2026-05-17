@@ -59,7 +59,8 @@ struct TranslateCurrentScreenshotIntent: AppIntent {
         let rendered = try ScreenshotRenderer().render(
             source: working,
             boxes: boxes,
-            translations: result.translations
+            translations: result.translations,
+            skippedIndices: result.skipped
         )
         return TranslationOutput(
             image: rendered,

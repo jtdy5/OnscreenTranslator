@@ -47,7 +47,7 @@ enum BoxTranslator {
     static func translate(
         boxes: [RecognizedTextBox],
         settings: AppSettings
-    ) async throws -> (translations: [String], note: String?) {
+    ) async throws -> (translations: [String], note: String?, skipped: Set<Int>) {
         let texts = boxes.map(\.text)
         let understood = settings.understoodLanguages.isEmpty
             ? [settings.targetLanguageCode]
@@ -61,7 +61,8 @@ enum BoxTranslator {
             understood: understood,
             allowedDetectionLanguages: allowedDetectionLanguages
         )
-        guard !toTranslate.isEmpty else { return (texts, nil) }
+        let skipped = Set(0..<texts.count).subtracting(toTranslate)
+        guard !toTranslate.isEmpty else { return (texts, nil, skipped) }
 
         let subset = toTranslate.map { texts[$0] }
         let translated = try await translateSubset(subset, settings: settings, allowedDetectionLanguages: allowedDetectionLanguages)
@@ -81,7 +82,7 @@ enum BoxTranslator {
         } else {
             note = nil
         }
-        return (output, note)
+        return (output, note, skipped)
     }
 
     @MainActor
