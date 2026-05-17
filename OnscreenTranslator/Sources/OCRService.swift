@@ -22,7 +22,13 @@ struct OCRService: Sendable {
                 // inputs (e.g. an image of pure noise).
                 let candidates = observations.compactMap { $0.topCandidates(1).first }
                 let medianConfidence = Self.median(candidates.map { $0.confidence })
-                let confidenceFloor = max(Float(0.20), medianConfidence * 0.5)
+                // Lowered from `max(0.20, median * 0.5)` to `max(0.10, median * 0.3)`:
+                // on real device renderings of dark-mode pages (e.g. Apple
+                // Weather warning bubbles), Vision returns 0.3-0.5 confidence
+                // for some Thai lines with stacked diacritics, well below
+                // the previous floor — those lines got silently dropped and
+                // showed through as un-masked source.
+                let confidenceFloor = max(Float(0.10), medianConfidence * 0.3)
 
                 let rawBoxes = observations.compactMap { observation -> RecognizedTextBox? in
                     guard let candidate = observation.topCandidates(1).first,
