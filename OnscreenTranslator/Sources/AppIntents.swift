@@ -50,18 +50,22 @@ struct TranslateCurrentScreenshotIntent: AppIntent {
 
     private func processShortcutImage(_ image: UIImage, settings: AppSettings) async throws -> TranslationOutput {
         let working = ImageScaler.downscale(image)
-        let boxes = try await OCRService().recognizeText(in: working, languageHints: settings.ocrLanguages)
+        guard let workingCG = working.cgImage else {
+            throw TranslationError.unreadableImage
+        }
+        let boxes = try await OCRService().recognizeText(in: workingCG, languageHints: settings.ocrLanguages)
         guard !boxes.isEmpty else {
             throw TranslationError.noTextFound
         }
 
         let result = try await BoxTranslator.translate(boxes: boxes, settings: settings)
-        let rendered = try ScreenshotRenderer().render(
-            source: working,
+        let renderedCG = try ScreenshotRenderer().render(
+            source: workingCG,
             boxes: boxes,
             translations: result.translations,
             skippedIndices: result.skipped
         )
+        let rendered = UIImage(cgImage: renderedCG, scale: working.scale, orientation: working.imageOrientation)
         return TranslationOutput(
             image: rendered,
             boxes: boxes,

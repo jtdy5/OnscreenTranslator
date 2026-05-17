@@ -197,7 +197,15 @@ struct TranslationService: Sendable {
             throw TranslationError.invalidResponse
         }
 
-        let result = try JSONDecoder().decode(TranslationResult.self, from: cleanedJSONData(jsonData, raw: content))
+        if ProcessInfo.processInfo.environment["DEBUG_TRANSLATION"] != nil {
+            FileHandle.standardError.write(Data("--- raw LLM content ---\n\(content)\n--- end ---\n".utf8))
+        }
+        let result: TranslationResult
+        do {
+            result = try JSONDecoder().decode(TranslationResult.self, from: cleanedJSONData(jsonData, raw: content))
+        } catch {
+            throw TranslationError.requestFailed("Could not parse translator JSON: \(error.localizedDescription). Raw: \(content.prefix(500))")
+        }
         var byIndex: [Int: String] = [:]
         for entry in result.translations {
             byIndex[entry.i] = entry.t

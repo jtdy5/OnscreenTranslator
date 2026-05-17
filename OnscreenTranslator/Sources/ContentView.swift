@@ -175,10 +175,13 @@ private struct TranslateView: View {
         do {
             let settingsSnapshot = settings.snapshot()
             let working = ImageScaler.downscale(selectedImage)
+            guard let workingCG = working.cgImage else {
+                throw TranslationError.unreadableImage
+            }
 
             stage = .recognizing
             let boxes = try await OCRService().recognizeText(
-                in: working,
+                in: workingCG,
                 languageHints: settingsSnapshot.ocrLanguages
             )
             guard !boxes.isEmpty else {
@@ -189,12 +192,13 @@ private struct TranslateView: View {
             let result = try await BoxTranslator.translate(boxes: boxes, settings: settingsSnapshot)
 
             stage = .rendering
-            let image = try ScreenshotRenderer().render(
-                source: working,
+            let renderedCG = try ScreenshotRenderer().render(
+                source: workingCG,
                 boxes: boxes,
                 translations: result.translations,
                 skippedIndices: result.skipped
             )
+            let image = UIImage(cgImage: renderedCG, scale: working.scale, orientation: working.imageOrientation)
             outputImage = image
             try history.add(
                 outputImage: image,

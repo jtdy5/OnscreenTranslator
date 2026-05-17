@@ -6,7 +6,10 @@ struct TranslationPipeline: Sendable {
     private let renderer = ScreenshotRenderer()
 
     func process(image: UIImage, settings: AppSettings) async throws -> TranslationOutput {
-        let boxes = try await ocr.recognizeText(in: image, languageHints: settings.ocrLanguages)
+        guard let cgImage = image.cgImage else {
+            throw TranslationError.unreadableImage
+        }
+        let boxes = try await ocr.recognizeText(in: cgImage, languageHints: settings.ocrLanguages)
         guard !boxes.isEmpty else {
             throw TranslationError.noTextFound
         }
@@ -16,11 +19,12 @@ struct TranslationPipeline: Sendable {
             targetLanguage: settings.targetLanguage,
             settings: settings
         )
-        let output = try renderer.render(
-            source: image,
+        let renderedCG = try renderer.render(
+            source: cgImage,
             boxes: boxes,
             translations: translated
         )
+        let output = UIImage(cgImage: renderedCG, scale: image.scale, orientation: image.imageOrientation)
 
         return TranslationOutput(image: output, boxes: boxes, translations: translated, partialFailureNote: nil)
     }

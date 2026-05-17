@@ -111,7 +111,11 @@ final class TranslationPipelineTests: XCTestCase {
         let ocrLanguages = ["th-TH", "zh-Hans", "en-US"]
         let understood = ["zh-Hans", "en"]
 
-        let boxes = try await OCRService().recognizeText(in: image, languageHints: ocrLanguages)
+        guard let cg = image.cgImage else {
+            XCTFail("Couldn't get CGImage")
+            return
+        }
+        let boxes = try await OCRService().recognizeText(in: cg, languageHints: ocrLanguages)
         XCTAssertFalse(boxes.isEmpty, "OCR found no text")
 
         let texts = boxes.map(\.text)
@@ -134,11 +138,12 @@ final class TranslationPipelineTests: XCTestCase {
             }
         }
 
-        let rendered = try ScreenshotRenderer().render(
-            source: image,
+        let renderedCG = try ScreenshotRenderer().render(
+            source: cg,
             boxes: boxes,
             translations: translations
         )
+        let rendered = UIImage(cgImage: renderedCG)
 
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let outURL = docs.appendingPathComponent("IMG_4780-apple-rendered.png")
@@ -173,7 +178,11 @@ final class TranslationPipelineTests: XCTestCase {
         let ocrLanguages = ["th-TH", "zh-Hans", "en-US"]
         let understood = ["zh-Hans", "en"]
 
-        let boxes = try await OCRService().recognizeText(in: image, languageHints: ocrLanguages)
+        guard let cg = image.cgImage else {
+            XCTFail("Couldn't get CGImage for \(name)")
+            return
+        }
+        let boxes = try await OCRService().recognizeText(in: cg, languageHints: ocrLanguages)
         XCTAssertFalse(boxes.isEmpty, "OCR found no text in \(name)")
 
         let texts = boxes.map(\.text)
@@ -192,11 +201,12 @@ final class TranslationPipelineTests: XCTestCase {
             return fakes[index % fakes.count]
         }
 
-        let rendered = try ScreenshotRenderer().render(
-            source: image,
+        let renderedCG = try ScreenshotRenderer().render(
+            source: cg,
             boxes: boxes,
             translations: translations
         )
+        let rendered = UIImage(cgImage: renderedCG)
 
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let outURL = docs.appendingPathComponent("\(name)-offline-rendered.png")
@@ -244,8 +254,12 @@ final class TranslationPipelineTests: XCTestCase {
             "GEMINI_API_KEY missing — check Secrets.xcconfig and host app Info.plist"
         )
 
+        guard let cg = image.cgImage else {
+            XCTFail("Couldn't get CGImage for \(name)")
+            return
+        }
         let boxes = try await OCRService().recognizeText(
-            in: image,
+            in: cg,
             languageHints: settings.ocrLanguages
         )
         XCTAssertFalse(boxes.isEmpty, "OCR found no text in \(name)")
@@ -257,11 +271,12 @@ final class TranslationPipelineTests: XCTestCase {
         )
         XCTAssertEqual(translations.count, boxes.count, "Translation count mismatch")
 
-        let rendered = try ScreenshotRenderer().render(
-            source: image,
+        let renderedCG = try ScreenshotRenderer().render(
+            source: cg,
             boxes: boxes,
             translations: translations
         )
+        let rendered = UIImage(cgImage: renderedCG)
 
         let renderedAttachment = XCTAttachment(image: rendered)
         renderedAttachment.name = "\(name)-rendered.png"

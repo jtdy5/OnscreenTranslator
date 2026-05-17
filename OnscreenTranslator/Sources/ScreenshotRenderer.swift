@@ -1,4 +1,7 @@
-import UIKit
+import Foundation
+import CoreGraphics
+import CoreText
+import ImageIO
 
 struct ScreenshotRenderer: Sendable {
     /// Render the translated overlay onto `image`.
@@ -10,71 +13,109 @@ struct ScreenshotRenderer: Sendable {
     ///   when translation came back identical to the source (treat as a
     ///   silent translation failure rather than letting the source bleed).
     func render(
-        source image: UIImage,
+        source image: CGImage,
         boxes: [RecognizedTextBox],
         translations: [String],
         skippedIndices: Set<Int> = []
-    ) throws -> UIImage {
-        guard boxes.count == translations.count, let cgImage = image.cgImage else {
+    ) throws -> CGImage {
+        guard boxes.count == translations.count else {
             throw TranslationError.invalidResponse
         }
 
-        let size = CGSize(width: cgImage.width, height: cgImage.height)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = true
+        let width = image.width
+        let height = image.height
+        let canvas = CGRect(x: 0, y: 0, width: width, height: height)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            throw TranslationError.invalidResponse
+        }
 
-        let canvas = CGRect(origin: .zero, size: size)
-        let downwardCeilings = Self.neighborCeilings(for: boxes, canvasHeight: size.height)
+        // CGBitmapContext rows are stored such that pixel-row 0 in memory is
+        // the BOTTOM of the drawn content (CG geometry is y-up). When written
+        // as PNG, row 0 ends up as the top of the file. So `context.draw(image)`
+        // by itself produces a PNG that's vertically mirrored relative to the
+        // source. Flipping the CTM globally fixes the image but breaks all of
+        // CG/CoreText drawing into a flipped frame.
+        //
+        // Instead: draw the image with no flip; let the bitmap rows be
+        // "upside-down" in CG-geometry terms; then run a post-flip on the
+        // final CGImage by re-drawing it through a flipping context.
+        context.draw(image, in: canvas)
+
+        // Vision/OCR rects use top-left origin (y increases downward). CGContext
+        // is bottom-left. flipY converts between them.
+        let H = CGFloat(height)
+        func flipY(_ rect: CGRect) -> CGRect {
+            CGRect(x: rect.minX, y: H - rect.maxY, width: rect.width, height: rect.height)
+        }
+
+        let downwardCeilings = Self.neighborCeilings(for: boxes, canvasHeight: H)
         let upwardFloors = Self.neighborFloors(for: boxes)
 
-        return UIGraphicsImageRenderer(size: size, format: format).image { context in
-            image.draw(in: CGRect(origin: .zero, size: size))
+        for (index, (box, translation)) in zip(boxes, translations).enumerated() {
+            if skippedIndices.contains(index) { continue }
+            let trimmed = translation.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Translation succeeded when we got back something non-empty
+            // that differs from the source. Otherwise we still draw the
+            // mask (so the source can't bleed through), but skip the text
+            // — there's nothing meaningful to put on top.
+            let hasTranslation = !trimmed.isEmpty && trimmed != box.text
 
-            for (index, (box, translation)) in zip(boxes, translations).enumerated() {
-                if skippedIndices.contains(index) { continue }
-                let trimmed = translation.trimmingCharacters(in: .whitespacesAndNewlines)
-                // Translation succeeded when we got back something non-empty
-                // that differs from the source. Otherwise we still draw the
-                // mask (so the source can't bleed through), but skip the text
-                // — there's nothing meaningful to put on top.
-                let hasTranslation = !trimmed.isEmpty && trimmed != box.text
-
-                // Pad vertically enough to swallow ascenders/descenders and
-                // diacritics (Thai vowel marks, Devanagari matras) that sit
-                // outside the OCR baseline box. Without this, the original
-                // glyph tops bleed out above the mask.
-                let base = box.rect.insetBy(dx: -3, dy: -7)
-                let downwardCeiling = downwardCeilings[index]
-                let upwardFloor = upwardFloors[index]
-                let targetFontSize = min(box.rect.height * 0.82, 34)
-                let padded = hasTranslation
-                    ? expandedRect(
-                        base: base,
-                        for: trimmed,
-                        targetFontSize: targetFontSize,
-                        canvas: canvas,
-                        downwardCeiling: downwardCeiling,
-                        upwardFloor: upwardFloor
-                    )
-                    : base.intersection(canvas)
-                let palette = sampledPalette(from: cgImage, box: box)
-                let path = UIBezierPath(roundedRect: padded, cornerRadius: min(8, padded.height / 4))
-                // Always opaque: anything below 1.0 lets the original glyphs
-                // ghost through, since the OCR box sits right on the source text.
-                palette.background.setFill()
-                path.fill()
-
-                guard hasTranslation else { continue }
-                draw(
-                    trimmed,
-                    in: padded.insetBy(dx: 4, dy: 2),
-                    context: context.cgContext,
-                    foreground: palette.foreground,
-                    targetFontSize: targetFontSize
+            // Pad vertically enough to swallow ascenders/descenders and
+            // diacritics (Thai vowel marks, Devanagari matras) that sit
+            // outside the OCR baseline box. Without this, the original
+            // glyph tops bleed out above the mask.
+            let base = box.rect.insetBy(dx: -3, dy: -7)
+            let downwardCeiling = downwardCeilings[index]
+            let upwardFloor = upwardFloors[index]
+            let targetFontSize = min(box.rect.height * 0.82, 34)
+            let padded = hasTranslation
+                ? expandedRect(
+                    base: base,
+                    for: trimmed,
+                    targetFontSize: targetFontSize,
+                    canvas: canvas,
+                    downwardCeiling: downwardCeiling,
+                    upwardFloor: upwardFloor
                 )
-            }
+                : base.intersection(canvas)
+            let palette = sampledPalette(from: image, box: box)
+            let paddedFlipped = flipY(padded)
+            let path = CGPath(
+                roundedRect: paddedFlipped,
+                cornerWidth: min(8, padded.height / 4),
+                cornerHeight: min(8, padded.height / 4),
+                transform: nil
+            )
+            // Always opaque: anything below 1.0 lets the original glyphs
+            // ghost through, since the OCR box sits right on the source text.
+            context.setFillColor(palette.background)
+            context.addPath(path)
+            context.fillPath()
+
+            guard hasTranslation else { continue }
+            drawText(
+                trimmed,
+                in: padded.insetBy(dx: 4, dy: 2),
+                flippedRect: flipY(padded.insetBy(dx: 4, dy: 2)),
+                context: context,
+                foreground: palette.foreground,
+                targetFontSize: targetFontSize
+            )
         }
+
+        guard let output = context.makeImage() else {
+            throw TranslationError.invalidResponse
+        }
+        return output
     }
 
     // MARK: - Rect expansion
@@ -91,15 +132,8 @@ struct ScreenshotRenderer: Sendable {
         // translation doesn't fit at `targetFontSize` we grow the rect first
         // downward up to the neighbouring box's top edge, then — when that
         // isn't enough — upward up to the box above. We never grow sideways.
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: targetFontSize, weight: .semibold)
-        ]
-        let measured = text.boundingRect(
-            with: CGSize(width: max(1, base.width - 8), height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: attributes,
-            context: nil
-        )
+        let font = makeFont(size: targetFontSize)
+        let measured = measureText(text, font: font, maxWidth: max(1, base.width - 8))
         let neededHeight = ceil(measured.height) + 6
         guard neededHeight > base.height else {
             return base.intersection(canvas)
@@ -162,92 +196,139 @@ struct ScreenshotRenderer: Sendable {
         }
     }
 
-    // MARK: - Text drawing
+    // MARK: - Text drawing (CoreText, cross-platform)
 
-    private func draw(
+    private func makeFont(size: CGFloat) -> CTFont {
+        // Match the iOS app's previous look (semibold system font). Use the
+        // platform's preferred system UI font family.
+        let descriptor = CTFontDescriptorCreateWithAttributes([
+            kCTFontSizeAttribute: size,
+            kCTFontTraitsAttribute: [
+                kCTFontWeightTrait: 0.3 // approx semibold
+            ]
+        ] as CFDictionary)
+        return CTFontCreateUIFontForLanguage(.system, size, nil)
+            ?? CTFontCreateWithFontDescriptor(descriptor, size, nil)
+    }
+
+    private func measureText(_ text: String, font: CTFont, maxWidth: CGFloat) -> CGSize {
+        let attr = makeAttributedString(text, font: font, color: nil)
+        let framesetter = CTFramesetterCreateWithAttributedString(attr)
+        let size = CTFramesetterSuggestFrameSizeWithConstraints(
+            framesetter,
+            CFRange(location: 0, length: 0),
+            nil,
+            CGSize(width: maxWidth, height: .greatestFiniteMagnitude),
+            nil
+        )
+        return CGSize(width: ceil(size.width), height: ceil(size.height))
+    }
+
+    private func makeAttributedString(_ text: String, font: CTFont, color: CGColor?) -> CFAttributedString {
+        // 0.95 line-height multiple: Chinese/Japanese/Korean glyphs don't need
+        // Latin-style leading; tightening the line height makes multi-line
+        // translations fit their source line height much more often.
+        let lineHeight = CTFontGetAscent(font) + CTFontGetDescent(font) + CTFontGetLeading(font)
+        let tightHeight = lineHeight * 0.95
+        let alignmentPtr = UnsafeMutablePointer<CTTextAlignment>.allocate(capacity: 1)
+        let maxPtr = UnsafeMutablePointer<CGFloat>.allocate(capacity: 1)
+        let minPtr = UnsafeMutablePointer<CGFloat>.allocate(capacity: 1)
+        defer {
+            alignmentPtr.deallocate()
+            maxPtr.deallocate()
+            minPtr.deallocate()
+        }
+        alignmentPtr.pointee = .center
+        maxPtr.pointee = tightHeight
+        minPtr.pointee = tightHeight
+        let settings = [
+            CTParagraphStyleSetting(spec: .alignment, valueSize: MemoryLayout<CTTextAlignment>.size, value: alignmentPtr),
+            CTParagraphStyleSetting(spec: .maximumLineHeight, valueSize: MemoryLayout<CGFloat>.size, value: maxPtr),
+            CTParagraphStyleSetting(spec: .minimumLineHeight, valueSize: MemoryLayout<CGFloat>.size, value: minPtr)
+        ]
+        let paragraphStyle = CTParagraphStyleCreate(settings, settings.count)
+
+        var attributes: [CFString: Any] = [
+            kCTFontAttributeName: font,
+            kCTParagraphStyleAttributeName: paragraphStyle
+        ]
+        if let color {
+            attributes[kCTForegroundColorAttributeName] = color
+        }
+        return CFAttributedStringCreate(nil, text as CFString, attributes as CFDictionary)
+            ?? NSAttributedString(string: text) as CFAttributedString
+    }
+
+    private func drawText(
         _ text: String,
         in rect: CGRect,
+        flippedRect: CGRect,
         context: CGContext,
-        foreground: UIColor,
+        foreground: CGColor,
         targetFontSize: CGFloat
     ) {
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.alignment = .center
-        paragraph.lineBreakMode = .byWordWrapping
-        // Chinese/Japanese/Korean glyphs don't need Latin-style leading;
-        // tightening the line height makes multi-line translations fit
-        // their source line height much more often.
-        paragraph.lineHeightMultiple = 0.95
-
         // Start at the target font size (visually matching the source UI).
         // Two shrink passes: comfortable lower bound 8pt, last-ditch 6pt
         // before truncation kicks in.
         let comfortFloor: CGFloat = 8
         let lastDitchFloor: CGFloat = 6
         var fontSize = max(comfortFloor, min(40, targetFontSize))
-        var attributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: fontSize, weight: .semibold),
-            .foregroundColor: foreground,
-            .paragraphStyle: paragraph
-        ]
 
         func fits(_ size: CGFloat) -> Bool {
-            attributes[.font] = UIFont.systemFont(ofSize: size, weight: .semibold)
-            let measured = text.boundingRect(
-                with: rect.size,
-                options: [.usesLineFragmentOrigin, .usesFontLeading],
-                attributes: attributes,
-                context: nil
-            )
+            let measured = measureText(text, font: makeFont(size: size), maxWidth: rect.width)
             return measured.height <= rect.height && measured.width <= rect.width
         }
 
         while fontSize > comfortFloor, !fits(fontSize) {
             fontSize -= 1
         }
-        // If the comfortable floor still overflows AND we're in a tight rect,
-        // grant one extra pass down to 6pt before truncating. Above that we'd
-        // rather show a `…`.
         if !fits(fontSize), rect.height < 14, fontSize > lastDitchFloor {
             while fontSize > lastDitchFloor, !fits(fontSize) {
                 fontSize -= 1
             }
         }
 
-        attributes[.font] = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
-        let measured = text.boundingRect(
-            with: rect.size,
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: attributes,
-            context: nil
-        )
-        if measured.height > rect.height || measured.width > rect.width {
-            paragraph.lineBreakMode = .byTruncatingTail
-            attributes[.paragraphStyle] = paragraph
-        }
+        let font = makeFont(size: fontSize)
+        let measured = measureText(text, font: font, maxWidth: rect.width)
 
         // Vertically center for boxes that closely match the text height
         // (single-line translations look natural sitting where the source
-        // text was). For tall merged paragraphs — where the Chinese is much
-        // more compact than the original — center wastes the rect; align to
-        // the top so the translation starts where the source paragraph did.
+        // text was). For tall merged paragraphs — where the translated text
+        // is much more compact than the original — center wastes the rect;
+        // align to the top so the translation starts where the source did.
         let slack = rect.height - measured.height
-        let yOffset: CGFloat = slack > measured.height ? 0 : max(0, slack / 2)
+        let topAlign = slack > measured.height
+        let yOffset: CGFloat = topAlign ? 0 : max(0, slack / 2)
+        let usedHeight = min(rect.height, max(measured.height, fontSize * 2))
+
+        // Convert "top y offset in top-left coords" into a CG-bottom-left
+        // rect that CoreText can draw into. yOffset moves down from the top
+        // of the source rect; in CG terms, the drawn rect's max-y stays
+        // pinned to flippedRect.maxY when yOffset=0 (top-aligned), and shifts
+        // downward (lower max-y) as yOffset grows.
         let drawRect = CGRect(
-            x: rect.minX,
-            y: rect.minY + yOffset,
-            width: rect.width,
-            height: rect.height
+            x: flippedRect.minX,
+            y: flippedRect.maxY - yOffset - usedHeight,
+            width: flippedRect.width,
+            height: usedHeight
         )
-        text.draw(with: drawRect, options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: attributes, context: nil)
+
+        let attr = makeAttributedString(text, font: font, color: foreground)
+        let framesetter = CTFramesetterCreateWithAttributedString(attr)
+        let path = CGPath(rect: drawRect, transform: nil)
+        let frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, nil)
+        CTFrameDraw(frame, context)
     }
 
     // MARK: - Colour palette
 
     private struct ColorPalette {
-        let foreground: UIColor
-        let background: UIColor
+        let foreground: CGColor
+        let background: CGColor
     }
+
+    private static let blackColor = CGColor(srgbRed: 0, green: 0, blue: 0, alpha: 1)
+    private static let whiteColor = CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1)
 
     /// Sample foreground/background colours for the translation overlay.
     ///
@@ -266,7 +347,7 @@ struct ScreenshotRenderer: Sendable {
         guard let dataProvider = image.dataProvider,
               let data = dataProvider.data,
               let bytes = CFDataGetBytePtr(data) else {
-            return ColorPalette(foreground: .black, background: .white)
+            return ColorPalette(foreground: Self.blackColor, background: Self.whiteColor)
         }
         let bytesPerPixel = max(1, image.bitsPerPixel / 8)
         let bytesPerRow = image.bytesPerRow
@@ -311,7 +392,6 @@ struct ScreenshotRenderer: Sendable {
         var fgSamples: [(r: Int, g: Int, b: Int, lum: CGFloat)] = []
         var bgSamples: [(r: Int, g: Int, b: Int, lum: CGFloat)] = []
 
-        // Foreground: sample pixels inside glyph rects (slightly inset).
         for glyph in glyphs {
             let inset = max(1, min(glyph.width, glyph.height) * 0.15)
             let inner = glyph.insetBy(dx: inset, dy: inset)
@@ -336,8 +416,6 @@ struct ScreenshotRenderer: Sendable {
         }
         guard !fgSamples.isEmpty else { return nil }
 
-        // Background: sample pixels inside `outer` that are NOT inside any glyph,
-        // with a slight padding around each glyph so we skip anti-aliased edges.
         let pad: CGFloat = 1
         let strideX = max(1, Int(outer.width / 24))
         let strideY = max(1, Int(outer.height / 12))
@@ -365,8 +443,6 @@ struct ScreenshotRenderer: Sendable {
 
         let fg = average(fgSamples)
         let bg = average(bgSamples)
-        // Sanity check: there must be enough contrast between the two clusters
-        // to make this distinction meaningful.
         if abs(fg.lum - bg.lum) < 0.10 {
             return nil
         }
@@ -389,7 +465,7 @@ struct ScreenshotRenderer: Sendable {
         let minY = max(0, Int(sample.minY))
         let maxY = min(imageHeight - 1, Int(sample.maxY))
         guard maxX > minX, maxY > minY else {
-            return ColorPalette(foreground: .black, background: .white)
+            return ColorPalette(foreground: blackColor, background: whiteColor)
         }
 
         let strideX = max(1, (maxX - minX) / 24)
@@ -417,13 +493,9 @@ struct ScreenshotRenderer: Sendable {
             y += strideY
         }
         guard !samples.isEmpty else {
-            return ColorPalette(foreground: .black, background: .white)
+            return ColorPalette(foreground: blackColor, background: whiteColor)
         }
 
-        // Adaptive contrast threshold: use the larger of 0.10 (hard floor) and
-        // 1.5× the per-box luminance standard deviation. Avoids the previous
-        // fixed 0.18 cutoff misclassifying low-contrast-but-legible text as
-        // "needs grayscale fallback".
         let meanLum = samples.reduce(0) { $0 + $1.lum } / CGFloat(samples.count)
         let variance = samples.reduce(0) { acc, s in
             let d = s.lum - meanLum
@@ -433,7 +505,7 @@ struct ScreenshotRenderer: Sendable {
         let contrastThreshold = max(0.10, stdLum * 1.5)
         guard (maxLum - minLum) > contrastThreshold else {
             let avg = average(samples)
-            return ColorPalette(foreground: avg.lum > 0.55 ? .black : .white, background: avg.color)
+            return ColorPalette(foreground: avg.lum > 0.55 ? blackColor : whiteColor, background: avg.color)
         }
 
         let midpoint = (minLum + maxLum) / 2
@@ -441,7 +513,7 @@ struct ScreenshotRenderer: Sendable {
         let brightCluster = samples.filter { $0.lum > midpoint }
         guard !darkCluster.isEmpty, !brightCluster.isEmpty else {
             let avg = average(samples)
-            return ColorPalette(foreground: avg.lum > 0.55 ? .black : .white, background: avg.color)
+            return ColorPalette(foreground: avg.lum > 0.55 ? blackColor : whiteColor, background: avg.color)
         }
 
         let darkAvg = average(darkCluster)
@@ -457,15 +529,15 @@ struct ScreenshotRenderer: Sendable {
         (0.2126 * CGFloat(r) + 0.7152 * CGFloat(g) + 0.0722 * CGFloat(b)) / 255
     }
 
-    private static func average(_ samples: [(r: Int, g: Int, b: Int, lum: CGFloat)]) -> (color: UIColor, lum: CGFloat) {
+    private static func average(_ samples: [(r: Int, g: Int, b: Int, lum: CGFloat)]) -> (color: CGColor, lum: CGFloat) {
         var rSum = 0, gSum = 0, bSum = 0
         var lSum: CGFloat = 0
         for s in samples {
             rSum += s.r; gSum += s.g; bSum += s.b; lSum += s.lum
         }
         let n = CGFloat(samples.count)
-        let color = UIColor(
-            red: CGFloat(rSum) / n / 255,
+        let color = CGColor(
+            srgbRed: CGFloat(rSum) / n / 255,
             green: CGFloat(gSum) / n / 255,
             blue: CGFloat(bSum) / n / 255,
             alpha: 1

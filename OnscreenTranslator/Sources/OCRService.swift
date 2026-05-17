@@ -1,12 +1,9 @@
-import UIKit
+import Foundation
+import CoreGraphics
 import Vision
 
 struct OCRService: Sendable {
-    func recognizeText(in image: UIImage, languageHints: [String]) async throws -> [RecognizedTextBox] {
-        guard let cgImage = image.cgImage else {
-            throw TranslationError.unreadableImage
-        }
-
+    func recognizeText(in cgImage: CGImage, languageHints: [String]) async throws -> [RecognizedTextBox] {
         return try await withCheckedThrowingContinuation { continuation in
             let request = VNRecognizeTextRequest { request, error in
                 if let error {

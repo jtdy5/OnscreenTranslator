@@ -7,3 +7,6 @@ xcuserdata/
 .DS_Store
 .claude/settings.local.json
 OnscreenTranslator/Config/Secrets.xcconfig
+.build/
+.swiftpm/
+Package.resolved
