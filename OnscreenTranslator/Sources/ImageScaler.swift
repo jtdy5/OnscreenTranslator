@@ -1,7 +1,14 @@
 import UIKit
 
 enum ImageScaler {
-    static let defaultMaxLongEdge: CGFloat = 1600
+    // 3200 px long-edge keeps modern phone screenshots (typically 1206×2622
+    // or 1290×2796) at native resolution — Vision OCR's per-line bbox
+    // accuracy drops sharply when small UI text gets pre-downsampled, and
+    // the renderer's paragraph-merging heuristics rely on consistent bbox
+    // proportions across an image. The earlier 1600 px cap silently halved
+    // tall screenshots, producing visibly different (and worse) results on
+    // device than the macOS render-preview tool that runs at full res.
+    static let defaultMaxLongEdge: CGFloat = 3200
 
     static func downscale(_ image: UIImage, maxLongEdge: CGFloat = defaultMaxLongEdge) -> UIImage {
         let longEdge = max(image.size.width, image.size.height) * image.scale
