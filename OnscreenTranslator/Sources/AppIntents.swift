@@ -59,6 +59,7 @@ struct TranslateCurrentScreenshotIntent: AppIntent {
         }
 
         let result = try await BoxTranslator.translate(boxes: boxes, settings: settings)
+        Self.writeDiagnosticDump(boxes: boxes, translations: result.translations, skipped: result.skipped)
         let renderedCG = try ScreenshotRenderer().render(
             source: workingCG,
             boxes: boxes,
@@ -72,6 +73,33 @@ struct TranslateCurrentScreenshotIntent: AppIntent {
             translations: result.translations,
             partialFailureNote: result.note
         )
+    }
+
+    /// Write the per-box OCR rect / source text / translation / skip flag to
+    /// `Documents/last-ocr-diagnostic.txt`. The user can airdrop or share
+    /// this file when debugging device-specific OCR / merge issues that
+    /// can't be reproduced via the macOS render-preview CLI.
+    private static func writeDiagnosticDump(
+        boxes: [RecognizedTextBox],
+        translations: [String],
+        skipped: Set<Int>
+    ) {
+        var lines: [String] = []
+        lines.append("# OCR diagnostic — \(Date())")
+        lines.append("# columns: index | flag | rect(x,y,w,h) | source → translation")
+        for (i, (box, t)) in zip(boxes, translations).enumerated() {
+            let flag = skipped.contains(i) ? "skip" : "    "
+            let r = String(format: "(%4.0f,%4.0f %4.0fx%4.0f)",
+                           box.rect.minX, box.rect.minY, box.rect.width, box.rect.height)
+            let srcEscaped = box.text.replacingOccurrences(of: "\n", with: "\\n")
+            let dstEscaped = t.replacingOccurrences(of: "\n", with: "\\n")
+            lines.append("[\(String(format: "%2d", i))] \(flag) \(r) \(srcEscaped) → \(dstEscaped)")
+        }
+        let payload = lines.joined(separator: "\n").data(using: .utf8) ?? Data()
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        if let url = docs?.appendingPathComponent("last-ocr-diagnostic.txt") {
+            try? payload.write(to: url, options: .atomic)
+        }
     }
 }
 
