@@ -102,34 +102,48 @@ struct OCRService: Sendable {
 
     // MARK: - Column detection
 
-    /// Detect whether the screenshot is laid out in two (or more) columns by
-    /// looking for a large empty horizontal gap between clusters of box
-    /// left-edges. Returns a column id per box index (in the same order as
-    /// `boxes`). When the layout is single-column every box gets the same id.
+    /// Detect column layout by clustering box left-edges. Returns a column id
+    /// per box index. Single-column screenshots get all zeros; grids (2-, 3-,
+    /// n-column product/menu layouts) get distinct ids so mergeAdjacent
+    /// won't fuse adjacent-but-different cards' text.
     private static func assignColumns(_ boxes: [RecognizedTextBox], canvasWidth: CGFloat) -> [Int] {
         guard boxes.count >= 6 else { return Array(repeating: 0, count: boxes.count) }
-        // Cluster box centers (use box.rect.midX). Find the largest gap between
-        // sorted centers — if it's > 25% of canvas and both sides have >= 3
-        // members we declare a column split there.
-        let centers = boxes.map(\.rect.midX).sorted()
-        var maxGap: CGFloat = 0
-        var splitX: CGFloat = 0
-        for i in 1..<centers.count {
-            let gap = centers[i] - centers[i - 1]
-            if gap > maxGap {
-                maxGap = gap
-                splitX = (centers[i] + centers[i - 1]) / 2
+        // Cluster `minX` values. Same-column entries share a left margin
+        // within a few pixels; new columns start at minX gaps of ≥ 10% of
+        // canvas width (UI grids usually leave at least a 100 px gutter on
+        // a 1206-wide screen).
+        let minClusterGap = max(canvasWidth * 0.1, 40)
+        let sortedMinX = boxes.map(\.rect.minX).sorted()
+        var clusterRepresentatives: [CGFloat] = [sortedMinX[0]]
+        for x in sortedMinX.dropFirst() {
+            if x - clusterRepresentatives.last! > minClusterGap {
+                clusterRepresentatives.append(x)
             }
         }
-        guard maxGap > canvasWidth * 0.25 else {
+        // Need at least 2 columns AND ≥ 2 members per column to claim a grid.
+        guard clusterRepresentatives.count >= 2 else {
             return Array(repeating: 0, count: boxes.count)
         }
-        let leftCount = boxes.filter { $0.rect.midX < splitX }.count
-        let rightCount = boxes.count - leftCount
-        guard leftCount >= 3, rightCount >= 3 else {
+        func columnFor(_ minX: CGFloat) -> Int {
+            var bestIndex = 0
+            var bestDistance = abs(minX - clusterRepresentatives[0])
+            for i in 1..<clusterRepresentatives.count {
+                let d = abs(minX - clusterRepresentatives[i])
+                if d < bestDistance {
+                    bestDistance = d
+                    bestIndex = i
+                }
+            }
+            return bestIndex
+        }
+        let ids = boxes.map { columnFor($0.rect.minX) }
+        var memberCount = Array(repeating: 0, count: clusterRepresentatives.count)
+        for id in ids { memberCount[id] += 1 }
+        let qualifyingColumns = memberCount.filter { $0 >= 2 }.count
+        guard qualifyingColumns >= 2 else {
             return Array(repeating: 0, count: boxes.count)
         }
-        return boxes.map { $0.rect.midX < splitX ? 0 : 1 }
+        return ids
     }
 
     // MARK: - Same-row merge
