@@ -300,8 +300,11 @@ struct OCRService: Sendable {
         // belongs to the same paragraph.
         let avgHeight = (referenceLineHeight + b.rect.height) / 2
         guard avgHeight > 0 else { return false }
-        // Next line must be below the current paragraph (allow tiny overlap).
-        guard b.rect.minY >= a.rect.maxY - avgHeight * 0.3 else { return false }
+        // Next line must be below the current paragraph (allow up to half the
+        // line height of overlap — Thai with stacked diacritics regularly has
+        // -25 to -30 px overlap between consecutive lines of the same
+        // paragraph, beyond the previous 30% tolerance).
+        guard b.rect.minY >= a.rect.maxY - avgHeight * 0.5 else { return false }
         let gap = b.rect.minY - a.rect.maxY
         // Hard cap at 1.5× the line height — beyond that we're crossing a
         // section/card boundary, not a line break inside a paragraph. The
@@ -322,10 +325,22 @@ struct OCRService: Sendable {
         let hOverlap = min(a.rect.maxX, b.rect.maxX) - max(a.rect.minX, b.rect.minX)
         let narrower = min(a.rect.width, b.rect.width)
         guard narrower > 0, hOverlap >= narrower * 0.5 else { return false }
-        // Same language (when both are detected).
+        // Same-language guard with a mixed-script exception. The original
+        // dominantScript check fragmented chat bubbles whose lines flip
+        // Thai/Latin from proper nouns ("สวัสดี Yesheng (Leo)" → English-
+        // dominant; the next line is Thai-dominant). Removing it entirely,
+        // though, fused English section headers like "Description" into
+        // the following Thai paragraph. Compromise: keep the language
+        // gate but waive it whenever either side contains glyphs of the
+        // other side's script — that catches the mixed-line chat case
+        // without giving up the pure-script section-header guard.
         if let lhs = lastLang, let rhs = candidateLang,
            LanguageDetector.baseCode(lhs) != LanguageDetector.baseCode(rhs) {
-            return false
+            let aHasMixedScript = LanguageDetector.containsMultipleScripts(a.text)
+            let bHasMixedScript = LanguageDetector.containsMultipleScripts(b.text)
+            if !(aHasMixedScript || bHasMixedScript) {
+                return false
+            }
         }
         return true
     }

@@ -166,6 +166,30 @@ enum LanguageDetector {
         return false
     }
 
+    /// True if `text` mixes two or more letter scripts (e.g. Latin + Thai —
+    /// a Thai sentence with an English proper noun, or vice versa). Used by
+    /// paragraph merging to keep mixed-script lines tied to their siblings
+    /// even when dominantScript would classify each line into a different
+    /// language.
+    static func containsMultipleScripts(_ text: String) -> Bool {
+        var seen = Set<Script>()
+        for scalar in text.unicodeScalars {
+            guard CharacterSet.letters.contains(scalar) || isCJK(scalar) else { continue }
+            let script = scriptOf(scalar)
+            guard script != .unknown else { continue }
+            seen.insert(script)
+            // Fold CJK siblings together — Han + Hiragana isn't "mixed" in
+            // the sense that matters here.
+            let cjk: Set<Script> = [.han, .hiragana, .katakana]
+            let cjkSeen = seen.intersection(cjk)
+            let nonCjkSeen = seen.subtracting(cjk)
+            if (cjkSeen.isEmpty ? 0 : 1) + nonCjkSeen.count >= 2 {
+                return true
+            }
+        }
+        return false
+    }
+
     /// Dominant Unicode script of a string, used to detect when an LLM output is
     /// still in the source script (retry trigger) without hardcoding per-pair
     /// code-point ranges.

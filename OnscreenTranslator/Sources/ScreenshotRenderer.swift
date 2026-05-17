@@ -69,13 +69,24 @@ struct ScreenshotRenderer: Sendable {
             // — there's nothing meaningful to put on top.
             let hasTranslation = !trimmed.isEmpty && trimmed != box.text
 
-            // Pad vertically enough to swallow ascenders/descenders and
-            // diacritics (Thai vowel marks, Devanagari matras) that sit
-            // outside the OCR baseline box. Without this, the original
-            // glyph tops bleed out above the mask.
-            let base = box.rect.insetBy(dx: -3, dy: -7)
             let downwardCeiling = downwardCeilings[index]
             let upwardFloor = upwardFloors[index]
+            // Pad vertically to swallow ascenders/descenders and diacritics
+            // (Thai vowel marks, Devanagari matras) that sit outside the OCR
+            // baseline box. CAP the padding to half the distance to the
+            // nearest neighbour — otherwise tightly stacked chat lines (gap
+            // = 1-2 px) inflate to overlapping masks that hide each other's
+            // text. With no neighbour, full 7-pt padding applies.
+            let topRoom = max(0, box.rect.minY - upwardFloor)
+            let botRoom = max(0, downwardCeiling - box.rect.maxY)
+            let topPad = min(7, topRoom / 2)
+            let botPad = min(7, botRoom / 2)
+            let base = CGRect(
+                x: box.rect.minX - 3,
+                y: box.rect.minY - topPad,
+                width: box.rect.width + 6,
+                height: box.rect.height + topPad + botPad
+            )
             // Match the source font size — the box's total height divided by
             // the number of source lines (paragraph-merged boxes know N from
             // the embedded newlines). Drives Chinese headlines to render big
