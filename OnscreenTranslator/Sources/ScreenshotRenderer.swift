@@ -76,7 +76,16 @@ struct ScreenshotRenderer: Sendable {
             let base = box.rect.insetBy(dx: -3, dy: -7)
             let downwardCeiling = downwardCeilings[index]
             let upwardFloor = upwardFloors[index]
-            let targetFontSize = min(box.rect.height * 0.82, 34)
+            // Match the source font size — the box's total height divided by
+            // the number of source lines (paragraph-merged boxes know N from
+            // the embedded newlines). Drives Chinese headlines to render big
+            // when the source is big, body copy small when source is small.
+            // The soft 50pt cap prevents runaway sizing on single-line Thai
+            // bbox where stacked diacritics inflate `box.rect.height` well
+            // beyond the visual font size.
+            let sourceLineCount = max(1, box.text.split(separator: "\n", omittingEmptySubsequences: false).count)
+            let perSourceLineHeight = box.rect.height / CGFloat(sourceLineCount)
+            let targetFontSize = max(8, min(perSourceLineHeight * 0.82, 50))
             let padded = hasTranslation
                 ? expandedRect(
                     base: base,
@@ -272,7 +281,7 @@ struct ScreenshotRenderer: Sendable {
         // before truncation kicks in.
         let comfortFloor: CGFloat = 8
         let lastDitchFloor: CGFloat = 6
-        var fontSize = max(comfortFloor, min(40, targetFontSize))
+        var fontSize = max(comfortFloor, targetFontSize)
 
         func fits(_ size: CGFloat) -> Bool {
             let measured = measureText(text, font: makeFont(size: size), maxWidth: rect.width)

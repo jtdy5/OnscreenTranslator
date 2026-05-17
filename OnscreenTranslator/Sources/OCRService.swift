@@ -317,7 +317,7 @@ struct OCRService: Sendable {
         // can be 60% taller than its neighbour at the same font size. 0.5
         // still catches headline-vs-body transitions (those are usually 2×+).
         let heightRatio = min(referenceLineHeight, b.rect.height) / max(referenceLineHeight, b.rect.height)
-        guard heightRatio >= 0.5 else { return false }
+        guard heightRatio >= 0.4 else { return false }
         // Horizontal overlap fraction relative to the narrower line.
         let hOverlap = min(a.rect.maxX, b.rect.maxX) - max(a.rect.minX, b.rect.minX)
         let narrower = min(a.rect.width, b.rect.width)
