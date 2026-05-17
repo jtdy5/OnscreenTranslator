@@ -19,8 +19,7 @@ struct TranslationPipeline: Sendable {
         let output = try renderer.render(
             source: image,
             boxes: boxes,
-            translations: translated,
-            maskOpacity: settings.maskOpacity
+            translations: translated
         )
 
         return TranslationOutput(image: output, boxes: boxes, translations: translated, partialFailureNote: nil)

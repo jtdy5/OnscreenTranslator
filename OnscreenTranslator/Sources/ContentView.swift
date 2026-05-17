@@ -192,8 +192,7 @@ private struct TranslateView: View {
             let image = try ScreenshotRenderer().render(
                 source: working,
                 boxes: boxes,
-                translations: result.translations,
-                maskOpacity: settingsSnapshot.maskOpacity
+                translations: result.translations
             )
             outputImage = image
             try history.add(
@@ -362,14 +361,6 @@ private struct SettingsView: View {
                     }
                     Text("Languages Vision should prioritize when reading text on-device. Add the ones you encounter — leaving extras in is fine.")
                         .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-
-                Section("Rendering") {
-                    Slider(value: $settings.maskOpacity, in: 0.4...1.0) {
-                        Text("Mask opacity")
-                    }
-                    Text("Mask opacity: \(settings.maskOpacity, specifier: "%.2f")")
                         .foregroundStyle(.secondary)
                 }
 

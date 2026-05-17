@@ -4,8 +4,7 @@ struct ScreenshotRenderer: Sendable {
     func render(
         source image: UIImage,
         boxes: [RecognizedTextBox],
-        translations: [String],
-        maskOpacity: Double
+        translations: [String]
     ) throws -> UIImage {
         guard boxes.count == translations.count, let cgImage = image.cgImage else {
             throw TranslationError.invalidResponse
@@ -27,13 +26,14 @@ struct ScreenshotRenderer: Sendable {
                 let trimmed = translation.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty, trimmed != box.text else { continue }
 
-                let base = box.rect.insetBy(dx: -2, dy: -4)
+                // Pad vertically enough to swallow ascenders/descenders and
+                // diacritics (Thai vowel marks, Devanagari matras) that sit
+                // outside the OCR baseline box. Without this, the original
+                // glyph tops bleed out above the mask.
+                let base = box.rect.insetBy(dx: -3, dy: -7)
                 let downwardCeiling = downwardCeilings[index]
                 let upwardFloor = upwardFloors[index]
-                // Cap the headline font so a 60pt original box doesn't try to
-                // render Chinese at 45pt — it almost never fits and looks worse
-                // than a smaller, fully-legible size.
-                let targetFontSize = min(box.rect.height * 0.75, 30)
+                let targetFontSize = min(box.rect.height * 0.82, 34)
                 let padded = expandedRect(
                     base: base,
                     for: trimmed,
@@ -43,9 +43,10 @@ struct ScreenshotRenderer: Sendable {
                     upwardFloor: upwardFloor
                 )
                 let palette = sampledPalette(from: cgImage, box: box)
-                let background = palette.background.withAlphaComponent(maskOpacity)
                 let path = UIBezierPath(roundedRect: padded, cornerRadius: min(8, padded.height / 4))
-                background.setFill()
+                // Always opaque: anything below 1.0 lets the original glyphs
+                // ghost through, since the OCR box sits right on the source text.
+                palette.background.setFill()
                 path.fill()
 
                 draw(
@@ -92,7 +93,11 @@ struct ScreenshotRenderer: Sendable {
         let downwardRoom = max(0, absoluteCeiling - base.maxY)
         let upwardRoom = max(0, base.minY - absoluteFloor)
 
-        let maxHeight = min(base.height + downwardRoom + upwardRoom, base.height * 6.0)
+        // Hard cap growth at 1.6× the original line height. Beyond that we
+        // shrink the font instead — letting one translation expand 2-3 lines
+        // tall reliably collides with neighbouring translations and produces
+        // a confusing, misaligned overlay.
+        let maxHeight = min(base.height + downwardRoom + upwardRoom, base.height * 1.6)
         let finalHeight = min(neededHeight, maxHeight)
         let extra = finalHeight - base.height
 
@@ -152,6 +157,10 @@ struct ScreenshotRenderer: Sendable {
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .center
         paragraph.lineBreakMode = .byWordWrapping
+        // Chinese/Japanese/Korean glyphs don't need Latin-style leading;
+        // tightening the line height makes multi-line translations fit
+        // their source line height much more often.
+        paragraph.lineHeightMultiple = 0.95
 
         // Start at the target font size (visually matching the source UI).
         // Two shrink passes: comfortable lower bound 8pt, last-ditch 6pt

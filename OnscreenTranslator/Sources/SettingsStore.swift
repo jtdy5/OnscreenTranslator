@@ -27,10 +27,6 @@ final class SettingsStore: ObservableObject {
         didSet { KeychainStore.save(apiKey, service: Keys.service, account: Keys.apiKey) }
     }
 
-    @Published var maskOpacity: Double {
-        didSet { UserDefaults.standard.set(maskOpacity, forKey: Keys.maskOpacity) }
-    }
-
     @Published var preferOnDeviceTranslation: Bool {
         didSet { UserDefaults.standard.set(preferOnDeviceTranslation, forKey: Keys.preferOnDeviceTranslation) }
     }
@@ -46,8 +42,6 @@ final class SettingsStore: ObservableObject {
         model = UserDefaults.standard.string(forKey: Keys.model) ?? "gemini-2.5-flash"
         ocrLanguages = UserDefaults.standard.string(forKey: Keys.ocrLanguages) ?? "th-TH,zh-Hans,en-US,ja-JP,ko-KR"
         apiKey = KeychainStore.read(service: Keys.service, account: Keys.apiKey) ?? Self.bundledAPIKey() ?? ""
-        let storedOpacity = UserDefaults.standard.object(forKey: Keys.maskOpacity) as? Double
-        maskOpacity = storedOpacity ?? 0.88
         let storedPreference = UserDefaults.standard.object(forKey: Keys.preferOnDeviceTranslation) as? Bool
         preferOnDeviceTranslation = storedPreference ?? true
         let storedUnderstood = UserDefaults.standard.string(forKey: Keys.understoodLanguages)
@@ -62,7 +56,6 @@ final class SettingsStore: ObservableObject {
             model: model,
             ocrLanguages: parsedOCRLanguages,
             apiKey: apiKey,
-            maskOpacity: maskOpacity,
             preferOnDeviceTranslation: preferOnDeviceTranslation,
             understoodLanguages: parsedUnderstoodLanguages
         )
@@ -98,7 +91,6 @@ struct AppSettings: Sendable {
     let model: String
     let ocrLanguages: [String]
     let apiKey: String
-    let maskOpacity: Double
     let preferOnDeviceTranslation: Bool
     let understoodLanguages: [String]
 
@@ -114,7 +106,6 @@ struct AppSettings: Sendable {
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty },
             apiKey: KeychainStore.read(service: Keys.service, account: Keys.apiKey) ?? SettingsStore.bundledAPIKey() ?? "",
-            maskOpacity: UserDefaults.standard.object(forKey: Keys.maskOpacity) as? Double ?? 0.88,
             preferOnDeviceTranslation: UserDefaults.standard.object(forKey: Keys.preferOnDeviceTranslation) as? Bool ?? true,
             understoodLanguages: (UserDefaults.standard.string(forKey: Keys.understoodLanguages) ?? targetCode)
                 .split(separator: ",")
@@ -132,7 +123,6 @@ enum Keys {
     static let model = "translationModel"
     static let ocrLanguages = "ocrLanguages"
     static let apiKey = "translationAPIKey"
-    static let maskOpacity = "maskOpacity"
     static let preferOnDeviceTranslation = "preferOnDeviceTranslation"
     static let understoodLanguages = "understoodLanguages"
     static let history = "translationHistory"

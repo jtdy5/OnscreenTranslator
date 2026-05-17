@@ -137,8 +137,7 @@ final class TranslationPipelineTests: XCTestCase {
         let rendered = try ScreenshotRenderer().render(
             source: image,
             boxes: boxes,
-            translations: translations,
-            maskOpacity: 0.88
+            translations: translations
         )
 
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
@@ -196,8 +195,7 @@ final class TranslationPipelineTests: XCTestCase {
         let rendered = try ScreenshotRenderer().render(
             source: image,
             boxes: boxes,
-            translations: translations,
-            maskOpacity: 0.88
+            translations: translations
         )
 
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
@@ -238,7 +236,6 @@ final class TranslationPipelineTests: XCTestCase {
             model: ProcessInfo.processInfo.environment["TEST_MODEL"] ?? "gemini-2.5-flash",
             ocrLanguages: defaults.ocrLanguages,
             apiKey: defaults.apiKey,
-            maskOpacity: defaults.maskOpacity,
             preferOnDeviceTranslation: false,
             understoodLanguages: defaults.understoodLanguages
         )
@@ -263,8 +260,7 @@ final class TranslationPipelineTests: XCTestCase {
         let rendered = try ScreenshotRenderer().render(
             source: image,
             boxes: boxes,
-            translations: translations,
-            maskOpacity: settings.maskOpacity
+            translations: translations
         )
 
         let renderedAttachment = XCTAttachment(image: rendered)

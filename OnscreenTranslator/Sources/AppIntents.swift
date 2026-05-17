@@ -27,7 +27,6 @@ struct TranslateCurrentScreenshotIntent: AppIntent {
                 model: settings.model,
                 ocrLanguages: settings.ocrLanguages,
                 apiKey: settings.apiKey,
-                maskOpacity: settings.maskOpacity,
                 preferOnDeviceTranslation: settings.preferOnDeviceTranslation,
                 understoodLanguages: settings.understoodLanguages
             )
@@ -60,8 +59,7 @@ struct TranslateCurrentScreenshotIntent: AppIntent {
         let rendered = try ScreenshotRenderer().render(
             source: working,
             boxes: boxes,
-            translations: result.translations,
-            maskOpacity: settings.maskOpacity
+            translations: result.translations
         )
         return TranslationOutput(
             image: rendered,
