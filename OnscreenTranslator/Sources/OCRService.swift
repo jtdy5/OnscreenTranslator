@@ -307,14 +307,30 @@ struct OCRService: Sendable {
         var mergedLastLineHeights: [CGFloat] = []
         for (index, box) in sorted.enumerated() {
             let lang = languages[index]
-            guard let last = merged.last else {
+            // Find the most recent merged paragraph that horizontally overlaps
+            // this box — i.e. sits in the same column. Searching only `last`
+            // is wrong on multi-column pages: when boxes from columns A, B,
+            // C, A arrive in minY order, the second A box can't see the
+            // first A box past the intervening B and C paragraphs.
+            var candidateIndex: Int? = nil
+            for i in (0..<merged.count).reversed() {
+                let cand = merged[i]
+                let hOverlap = min(cand.rect.maxX, box.rect.maxX) - max(cand.rect.minX, box.rect.minX)
+                let narrower = min(cand.rect.width, box.rect.width)
+                if narrower > 0, hOverlap >= narrower * 0.5 {
+                    candidateIndex = i
+                    break
+                }
+            }
+            guard let i = candidateIndex else {
                 merged.append(box)
                 mergedLanguages.append(lang)
                 mergedLastLineHeights.append(box.rect.height)
                 continue
             }
-            let lastLang = mergedLanguages.last ?? nil
-            let referenceHeight = mergedLastLineHeights[mergedLastLineHeights.count - 1]
+            let last = merged[i]
+            let lastLang = mergedLanguages[i]
+            let referenceHeight = mergedLastLineHeights[i]
             if Self.shouldJoinParagraph(
                 last,
                 b: box,
@@ -324,7 +340,7 @@ struct OCRService: Sendable {
                 candidateLang: lang
             ) {
                 let union = last.rect.union(box.rect)
-                merged[merged.count - 1] = RecognizedTextBox(
+                merged[i] = RecognizedTextBox(
                     id: last.id,
                     text: last.text + "\n" + box.text,
                     confidence: min(last.confidence, box.confidence),
@@ -332,9 +348,9 @@ struct OCRService: Sendable {
                     glyphRects: last.glyphRects + box.glyphRects
                 )
                 if lastLang == nil {
-                    mergedLanguages[mergedLanguages.count - 1] = lang
+                    mergedLanguages[i] = lang
                 }
-                mergedLastLineHeights[mergedLastLineHeights.count - 1] = box.rect.height
+                mergedLastLineHeights[i] = box.rect.height
             } else {
                 merged.append(box)
                 mergedLanguages.append(lang)
