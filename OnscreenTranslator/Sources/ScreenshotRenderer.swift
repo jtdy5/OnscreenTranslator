@@ -91,12 +91,20 @@ struct ScreenshotRenderer: Sendable {
             // the number of source lines (paragraph-merged boxes know N from
             // the embedded newlines). Drives Chinese headlines to render big
             // when the source is big, body copy small when source is small.
-            // The soft 50pt cap prevents runaway sizing on single-line Thai
-            // bbox where stacked diacritics inflate `box.rect.height` well
-            // beyond the visual font size.
+            //
+            // Ratio of 0.65: OCR bbox heights from Vision include the full
+            // ascender + descender range, which for scripts like Thai/Latin
+            // is ~30-40 % taller than the visible cap-height. 0.65 of the
+            // bbox matches the visual font size much more closely than the
+            // earlier 0.82, which made Chinese consistently render about a
+            // third larger than the source it was replacing.
+            //
+            // 50pt soft cap protects against further runaway on single-line
+            // bbox where Thai stacked diacritics make the box even taller
+            // than the typical 30 % overhead.
             let sourceLineCount = max(1, box.text.split(separator: "\n", omittingEmptySubsequences: false).count)
             let perSourceLineHeight = box.rect.height / CGFloat(sourceLineCount)
-            let targetFontSize = max(8, min(perSourceLineHeight * 0.82, 50))
+            let targetFontSize = max(8, min(perSourceLineHeight * 0.65, 50))
             let padded = hasTranslation
                 ? expandedRect(
                     base: base,

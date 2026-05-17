@@ -120,15 +120,15 @@ struct OCRService: Sendable {
                 clusterRepresentatives.append(x)
             }
         }
-        // Need at least 2 columns AND ≥ 2 members per column to claim a grid.
         guard clusterRepresentatives.count >= 2 else {
             return Array(repeating: 0, count: boxes.count)
         }
-        func columnFor(_ minX: CGFloat) -> Int {
+        // First pass: assign every box to the nearest cluster representative.
+        func nearest(_ minX: CGFloat, in reps: [CGFloat]) -> Int {
             var bestIndex = 0
-            var bestDistance = abs(minX - clusterRepresentatives[0])
-            for i in 1..<clusterRepresentatives.count {
-                let d = abs(minX - clusterRepresentatives[i])
+            var bestDistance = abs(minX - reps[0])
+            for i in 1..<reps.count {
+                let d = abs(minX - reps[i])
                 if d < bestDistance {
                     bestDistance = d
                     bestIndex = i
@@ -136,14 +136,21 @@ struct OCRService: Sendable {
             }
             return bestIndex
         }
-        let ids = boxes.map { columnFor($0.rect.minX) }
+        let initialIds = boxes.map { nearest($0.rect.minX, in: clusterRepresentatives) }
         var memberCount = Array(repeating: 0, count: clusterRepresentatives.count)
-        for id in ids { memberCount[id] += 1 }
-        let qualifyingColumns = memberCount.filter { $0 >= 2 }.count
-        guard qualifyingColumns >= 2 else {
+        for id in initialIds { memberCount[id] += 1 }
+        // Drop singleton "columns" — they almost always come from one stray
+        // header / chip element (the "Muk" username at x=346, the back
+        // chevron, etc.), not a real content column. Re-snap those boxes to
+        // the nearest column that DID survive the singleton filter so they
+        // can still merge with neighbours in same-row passes.
+        let validClusters = clusterRepresentatives.enumerated().compactMap { idx, rep in
+            memberCount[idx] >= 2 ? rep : nil
+        }
+        guard validClusters.count >= 2 else {
             return Array(repeating: 0, count: boxes.count)
         }
-        return ids
+        return boxes.map { nearest($0.rect.minX, in: validClusters) }
     }
 
     // MARK: - Same-row merge
@@ -182,7 +189,20 @@ struct OCRService: Sendable {
             }
             let lastLang = mergedLanguages.last ?? nil
             let lastColumn = mergedColumns.last ?? column
-            if column == lastColumn,
+            // Same-column requirement keeps grid layouts from fusing across
+            // cards. Bypass it when the two boxes look like an OCR-split-
+            // artifact pair (one is a ≤3-char fragment vertically contained
+            // in the other) — that's a strong same-row-same-line signal that
+            // overrides the coarser column geometry, which otherwise
+            // misclassifies the larger fragment because its leftmost glyph
+            // sits past the column's natural left margin.
+            let trimmedLast = last.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedBox = box.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let lastInsideBox = last.rect.minY >= box.rect.minY && last.rect.maxY <= box.rect.maxY && last.rect.height < box.rect.height
+            let boxInsideLast = box.rect.minY >= last.rect.minY && box.rect.maxY <= last.rect.maxY && box.rect.height < last.rect.height
+            let artifactMerge = (lastInsideBox && trimmedLast.count <= 3) || (boxInsideLast && trimmedBox.count <= 3)
+            let canConsiderMerge = column == lastColumn || artifactMerge
+            if canConsiderMerge,
                Self.shouldMerge(last, box, medianGap: medianGap, lastLang: lastLang, candidateLang: lang) {
                 let union = last.rect.union(box.rect)
                 merged[merged.count - 1] = RecognizedTextBox(
