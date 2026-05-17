@@ -123,11 +123,6 @@ struct RenderPreview {
             log("[\(String(format: "%2d", i))] \(tag) \(rect) src=\"\(box.text)\" → \"\(t)\"")
         }
 
-        let task = Process()
-        task.launchPath = "/usr/bin/open"
-        task.arguments = [outURL.path]
-        try task.run()
-        task.waitUntilExit()
     }
 
     static func writePNG(_ image: CGImage, to url: URL) throws {

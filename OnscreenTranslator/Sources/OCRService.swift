@@ -204,19 +204,35 @@ struct OCRService: Sendable {
         let vOverlap = min(a.rect.maxY, b.rect.maxY) - max(a.rect.minY, b.rect.minY)
         let shorter = min(a.rect.height, b.rect.height)
         guard shorter > 0, vOverlap >= shorter * 0.5 else { return false }
+        // Detect the "OCR-split-artifact" pattern up front: Vision sometimes
+        // chops a single visual line at an inline emoji into a short ≤3-char
+        // fragment that sits fully inside the vertical range of the rest of
+        // the line ("ดาว 😊 เราดีใจ..."). The fragment is much shorter than
+        // its sibling, so the standard height-ratio / line-gap heuristics
+        // both block the merge — neither matches its natural same-row
+        // semantics. Bypass both for this case.
+        let trimmedA = a.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedB = b.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let aInsideB = a.rect.minY >= b.rect.minY && a.rect.maxY <= b.rect.maxY && a.rect.height < b.rect.height
+        let bInsideA = b.rect.minY >= a.rect.minY && b.rect.maxY <= a.rect.maxY && b.rect.height < a.rect.height
+        let aIsSplitFragment = aInsideB && trimmedA.count <= 3
+        let bIsSplitFragment = bInsideA && trimmedB.count <= 3
+        let isOcrSplitArtifact = aIsSplitFragment || bIsSplitFragment
+
         // Similar font size: heights within 50% of each other.
         let heightRatio = min(a.rect.height, b.rect.height) / max(a.rect.height, b.rect.height)
-        guard heightRatio >= 0.5 else { return false }
+        if !isOcrSplitArtifact {
+            guard heightRatio >= 0.5 else { return false }
+        }
         // Horizontal gap: tolerate up to 2× the screenshot's median inter-box
         // gap, with a small per-pair floor so single-row screenshots still
-        // merge sensibly.
+        // merge sensibly. Cap at ~1.2× line height for normal text — tab-bar
+        // dividers and column gaps usually exceed that. The OCR-split case
+        // gets a much wider allowance to swallow the emoji gap.
         let gap = b.rect.minX - a.rect.maxX
-        // Cap at ~1.2× line height. Adjacent words / icon-text pairs are at
-        // most this far apart. Anything wider is almost certainly a tab-bar
-        // divider or a separate UI element (pill buttons, column breaks).
-        // Using `medianGap*2` alone is too lenient on UIs with many wide
-        // gaps (e.g. tab bars) — it inflates the per-screenshot baseline.
-        let upperBound = min(max(medianGap * 2, avgHeight * 0.6), avgHeight * 1.2)
+        let upperBound = isOcrSplitArtifact
+            ? max(medianGap * 3, avgHeight * 2.5)
+            : min(max(medianGap * 2, avgHeight * 0.6), avgHeight * 1.2)
         guard gap >= -avgHeight * 0.3, gap <= upperBound else { return false }
         // NB: we intentionally do NOT require same language here. Mixed-script
         // lines are the common case for chat / app UI ("ร้าน Saver" or
