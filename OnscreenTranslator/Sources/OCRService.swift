@@ -398,6 +398,13 @@ struct OCRService: Sendable {
         let hOverlap = min(a.rect.maxX, b.rect.maxX) - max(a.rect.minX, b.rect.minX)
         let narrower = min(a.rect.width, b.rect.width)
         guard narrower > 0, hOverlap >= narrower * 0.5 else { return false }
+        // Left-edge alignment: real paragraph lines share a left margin to
+        // within a few pixels. Decorative stickers stacked on a card vary
+        // their minX based on layout, so a large minX delta is a strong
+        // signal these belong to different visual blocks even if they
+        // happen to horizontally overlap (and share the same coarse column).
+        let leftDelta = abs(a.rect.minX - b.rect.minX)
+        guard leftDelta <= avgHeight * 0.8 else { return false }
         // Same-language guard with a mixed-script exception. The original
         // dominantScript check fragmented chat bubbles whose lines flip
         // Thai/Latin from proper nouns ("สวัสดี Yesheng (Leo)" → English-
