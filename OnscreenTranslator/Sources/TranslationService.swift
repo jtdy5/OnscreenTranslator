@@ -200,11 +200,21 @@ struct TranslationService: Sendable {
         if ProcessInfo.processInfo.environment["DEBUG_TRANSLATION"] != nil {
             FileHandle.standardError.write(Data("--- raw LLM content ---\n\(content)\n--- end ---\n".utf8))
         }
+        // Gemini occasionally emits malformed JSON like `{"i:3,"t":...}` —
+        // missing the closing quote after a single-letter key. Try the strict
+        // parse first; if it fails, run a targeted repair pass and retry.
+        let cleaned = cleanedJSONData(jsonData, raw: content)
         let result: TranslationResult
-        do {
-            result = try JSONDecoder().decode(TranslationResult.self, from: cleanedJSONData(jsonData, raw: content))
-        } catch {
-            throw TranslationError.requestFailed("Could not parse translator JSON: \(error.localizedDescription). Raw: \(content.prefix(500))")
+        if let direct = try? JSONDecoder().decode(TranslationResult.self, from: cleaned) {
+            result = direct
+        } else if let repaired = Self.repairTranslatorJSON(cleaned),
+                  let recovered = try? JSONDecoder().decode(TranslationResult.self, from: repaired) {
+            result = recovered
+        } else {
+            // Soft-fail: return source texts so the renderer still masks the
+            // boxes but skips the (missing) translation. Caller's retry path
+            // and partial-failure note already surface this to the user.
+            return texts
         }
         var byIndex: [Int: String] = [:]
         for entry in result.translations {
@@ -257,6 +267,31 @@ struct TranslationService: Sendable {
             return Data(lines.joined(separator: "\n").utf8)
         }
         return data
+    }
+
+    /// Targeted repairs for LLM-generated JSON that's almost-valid. Today
+    /// the observed failure is a missing closing quote on the `i` or `t`
+    /// key — e.g. `{"i:3,"t":...}` — when the model gets sloppy near a
+    /// single-letter key. We patch obvious instances and let the strict
+    /// parser have another go. Returns nil when there's nothing to fix or
+    /// the result is still obviously broken.
+    static func repairTranslatorJSON(_ data: Data) -> Data? {
+        guard var s = String(data: data, encoding: .utf8) else { return nil }
+        let before = s
+        // Fix `"i:NUMBER` → `"i":NUMBER` (key forgot its closing quote).
+        s = s.replacingOccurrences(
+            of: #""i:(\d+)"#,
+            with: #""i":$1"#,
+            options: .regularExpression
+        )
+        // Fix `"t:"VALUE"` → `"t":"VALUE"` (same for the text key).
+        s = s.replacingOccurrences(
+            of: #""t:""#,
+            with: #""t":""#,
+            options: .regularExpression
+        )
+        guard s != before else { return nil }
+        return Data(s.utf8)
     }
 }
 

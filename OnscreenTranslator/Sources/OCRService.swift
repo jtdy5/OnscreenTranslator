@@ -211,7 +211,12 @@ struct OCRService: Sendable {
         // gap, with a small per-pair floor so single-row screenshots still
         // merge sensibly.
         let gap = b.rect.minX - a.rect.maxX
-        let upperBound = max(medianGap * 2, avgHeight * 0.6)
+        // Cap at ~1.2× line height. Adjacent words / icon-text pairs are at
+        // most this far apart. Anything wider is almost certainly a tab-bar
+        // divider or a separate UI element (pill buttons, column breaks).
+        // Using `medianGap*2` alone is too lenient on UIs with many wide
+        // gaps (e.g. tab bars) — it inflates the per-screenshot baseline.
+        let upperBound = min(max(medianGap * 2, avgHeight * 0.6), avgHeight * 1.2)
         guard gap >= -avgHeight * 0.3, gap <= upperBound else { return false }
         // NB: we intentionally do NOT require same language here. Mixed-script
         // lines are the common case for chat / app UI ("ร้าน Saver" or

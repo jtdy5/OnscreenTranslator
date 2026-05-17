@@ -87,7 +87,7 @@ struct ScreenshotRenderer: Sendable {
                     upwardFloor: upwardFloor
                 )
                 : base.intersection(canvas)
-            let palette = sampledPalette(from: image, box: box)
+            let palette = Self.ensureContrast(sampledPalette(from: image, box: box))
             let paddedFlipped = flipY(padded)
             let path = CGPath(
                 roundedRect: paddedFlipped,
@@ -329,6 +329,31 @@ struct ScreenshotRenderer: Sendable {
 
     private static let blackColor = CGColor(srgbRed: 0, green: 0, blue: 0, alpha: 1)
     private static let whiteColor = CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1)
+
+    /// Post-process the sampled palette to guarantee readable text. When the
+    /// sampled foreground/background luminance delta is below ~0.35, the
+    /// translation reads as a faded smudge against the mask even though both
+    /// colours individually look correct. Force the foreground to black or
+    /// white (whichever wins the contrast race against the background) when
+    /// the natural delta is too small.
+    private static func ensureContrast(_ palette: ColorPalette) -> ColorPalette {
+        let bgLum = lumOf(palette.background)
+        let fgLum = lumOf(palette.foreground)
+        guard abs(bgLum - fgLum) < 0.35 else { return palette }
+        let forced = bgLum > 0.5 ? blackColor : whiteColor
+        return ColorPalette(foreground: forced, background: palette.background)
+    }
+
+    private static func lumOf(_ color: CGColor) -> CGFloat {
+        guard let components = color.components else { return 0 }
+        let count = color.numberOfComponents
+        if count >= 3 {
+            return 0.2126 * components[0] + 0.7152 * components[1] + 0.0722 * components[2]
+        } else if count >= 1 {
+            return components[0]
+        }
+        return 0
+    }
 
     /// Sample foreground/background colours for the translation overlay.
     ///
