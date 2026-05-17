@@ -87,24 +87,28 @@ struct ScreenshotRenderer: Sendable {
                 width: box.rect.width + 6,
                 height: box.rect.height + topPad + botPad
             )
-            // Match the source font size — the box's total height divided by
-            // the number of source lines (paragraph-merged boxes know N from
-            // the embedded newlines). Drives Chinese headlines to render big
-            // when the source is big, body copy small when source is small.
+            // Match the source font size. Two independent estimates, take
+            // the smaller as a safety net:
             //
-            // Ratio of 0.65: OCR bbox heights from Vision include the full
-            // ascender + descender range, which for scripts like Thai/Latin
-            // is ~30-40 % taller than the visible cap-height. 0.65 of the
-            // bbox matches the visual font size much more closely than the
-            // earlier 0.82, which made Chinese consistently render about a
-            // third larger than the source it was replacing.
+            //  1. Per-line bbox height × 0.65. OCR bbox heights include the
+            //     full ascender + descender range (~30 % taller than the
+            //     visible cap-height), so 0.65 of the bbox lands close to
+            //     the source's visual size.
+            //  2. Per-character width × 1.8. Thai stacked diacritics can
+            //     inflate the height of one line 50-100 % over its
+            //     neighbours at the same visual font size; the character
+            //     WIDTH is far more stable. Using width-per-character as a
+            //     ceiling stops "สุกี้ดาวเรียง" (h=71) from rendering at
+            //     46 pt while its same-font sibling "ผัดกะเพรา…" (h=48)
+            //     renders at 31 pt.
             //
-            // 50pt soft cap protects against further runaway on single-line
-            // bbox where Thai stacked diacritics make the box even taller
-            // than the typical 30 % overhead.
+            // 50 pt soft cap is a final guard against extreme outliers.
             let sourceLineCount = max(1, box.text.split(separator: "\n", omittingEmptySubsequences: false).count)
             let perSourceLineHeight = box.rect.height / CGFloat(sourceLineCount)
-            let targetFontSize = max(8, min(perSourceLineHeight * 0.65, 50))
+            let heightBasedFont = perSourceLineHeight * 0.65
+            let charsPerLine = max(1, box.text.count / sourceLineCount)
+            let widthBasedFont = (box.rect.width / CGFloat(charsPerLine)) * 1.8
+            let targetFontSize = max(8, min(min(heightBasedFont, widthBasedFont), 50))
             let padded = hasTranslation
                 ? expandedRect(
                     base: base,
