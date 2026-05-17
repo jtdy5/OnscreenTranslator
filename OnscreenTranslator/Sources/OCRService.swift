@@ -264,8 +264,15 @@ struct OCRService: Sendable {
         // dividers and column gaps usually exceed that. The OCR-split case
         // gets a much wider allowance to swallow the emoji gap.
         let gap = b.rect.minX - a.rect.maxX
+        // For OCR-split-artifact merges (emoji breaking one line into pieces),
+        // the gap is the rendered width of the emoji — usually ≤ 1.5 line
+        // heights. Anything wider is almost certainly a different element
+        // entirely (the artifact rule is dangerous because it also bypasses
+        // the column gate, so a "PEPSIMEGA" sticker in one card could
+        // otherwise merge with "งสุด" 237 px away in a different card on
+        // the same row).
         let upperBound = isOcrSplitArtifact
-            ? max(medianGap * 3, avgHeight * 2.5)
+            ? avgHeight * 2.0
             : min(max(medianGap * 2, avgHeight * 0.6), avgHeight * 1.2)
         guard gap >= -avgHeight * 0.3, gap <= upperBound else { return false }
         // NB: we intentionally do NOT require same language here. Mixed-script
