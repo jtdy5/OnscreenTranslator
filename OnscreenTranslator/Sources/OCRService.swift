@@ -4,53 +4,80 @@ import Vision
 
 struct OCRService: Sendable {
     func recognizeText(in cgImage: CGImage, languageHints: [String]) async throws -> [RecognizedTextBox] {
-        return try await withCheckedThrowingContinuation { continuation in
+        let size = CGSize(width: cgImage.width, height: cgImage.height)
+        // Pass 1: the user's full language hint list with auto-detect on.
+        // Handles mixed-script UIs (Latin labels next to Thai body text, etc.).
+        var combined = try await rawBoxes(
+            in: cgImage,
+            size: size,
+            recognitionLanguages: languageHints,
+            autoDetect: true
+        )
+        // Pass 2 (only when the hint list contains Thai or another script
+        // that iOS Vision tends to miss): force a single-language request
+        // with auto-detect off. On real-device iOS, Vision sometimes
+        // returns a chunky multi-line observation for part of a Thai
+        // paragraph and silently drops the lines between two chunks; a
+        // dedicated Thai-only pass surfaces those missing lines so we can
+        // merge them back in. The combined results are then deduplicated
+        // by spatial + text overlap.
+        let scriptFallbackHints = Set(["th-TH", "th"])
+        let needsFallback = languageHints.contains { scriptFallbackHints.contains($0) }
+        if needsFallback {
+            let secondPass = try await rawBoxes(
+                in: cgImage,
+                size: size,
+                recognitionLanguages: ["th-TH"],
+                autoDetect: false
+            )
+            combined = Self.unionBoxes(combined, with: secondPass)
+        }
+
+        let deduped = Self.deduplicate(combined)
+        let columnIds = Self.assignColumns(deduped, canvasWidth: size.width)
+        let horizontallyMerged = Self.mergeAdjacent(deduped, columnIds: columnIds)
+        let paragraphs = Self.mergeParagraphs(horizontallyMerged)
+        return paragraphs
+    }
+
+    /// Run a single Vision OCR pass and return the post-filter raw boxes.
+    /// Multi-pass callers union results before deduplication / merging.
+    private func rawBoxes(
+        in cgImage: CGImage,
+        size: CGSize,
+        recognitionLanguages: [String],
+        autoDetect: Bool
+    ) async throws -> [RecognizedTextBox] {
+        try await withCheckedThrowingContinuation { continuation in
             let request = VNRecognizeTextRequest { request, error in
                 if let error {
                     continuation.resume(throwing: error)
                     return
                 }
-
                 let observations = (request.results as? [VNRecognizedTextObservation]) ?? []
-                let size = CGSize(width: cgImage.width, height: cgImage.height)
-
-                // Adaptive confidence floor: keep boxes that are clearly above the
-                // screenshot's own noise floor. Crisp UI screenshots have a high
-                // median (0.9+) so we can comfortably drop weaker detections;
-                // photo-text screenshots have a much lower median and we keep
-                // more of them. A hard floor of 0.20 protects against pathological
-                // inputs (e.g. an image of pure noise).
                 let candidates = observations.compactMap { $0.topCandidates(1).first }
                 let medianConfidence = Self.median(candidates.map { $0.confidence })
-                // Lowered from `max(0.20, median * 0.5)` to `max(0.10, median * 0.3)`:
-                // on real device renderings of dark-mode pages (e.g. Apple
-                // Weather warning bubbles), Vision returns 0.3-0.5 confidence
-                // for some Thai lines with stacked diacritics, well below
-                // the previous floor — those lines got silently dropped and
-                // showed through as un-masked source.
                 let confidenceFloor = max(Float(0.10), medianConfidence * 0.3)
 
-                let rawBoxes = observations.compactMap { observation -> RecognizedTextBox? in
+                let boxes = observations.compactMap { observation -> RecognizedTextBox? in
                     guard let candidate = observation.topCandidates(1).first,
                           candidate.confidence >= confidenceFloor else {
                         return nil
                     }
-
                     let rect = Self.pixelRect(from: observation.boundingBox, imageSize: size)
                     guard rect.width > 8, rect.height > 6 else { return nil }
-
                     let trimmed = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
-                    // Reject only *tiny* tokens that are also mostly symbols. URLs,
-                    // percentages, prices, hashtags etc. all pass through because
-                    // they are longer than 3 characters.
                     let letterDigitCount = trimmed.unicodeScalars.filter {
                         CharacterSet.letters.contains($0) || CharacterSet.decimalDigits.contains($0)
                     }.count
                     if trimmed.count <= 3, letterDigitCount * 2 < trimmed.count {
                         return nil
                     }
-
-                    let glyphs = Self.glyphRects(for: candidate, range: candidate.string.startIndex..<candidate.string.endIndex, imageSize: size)
+                    let glyphs = Self.glyphRects(
+                        for: candidate,
+                        range: candidate.string.startIndex..<candidate.string.endIndex,
+                        imageSize: size
+                    )
                     return RecognizedTextBox(
                         text: candidate.string,
                         confidence: candidate.confidence,
@@ -58,21 +85,14 @@ struct OCRService: Sendable {
                         glyphRects: glyphs
                     )
                 }
-
-                let deduped = Self.deduplicate(rawBoxes)
-                let columnIds = Self.assignColumns(deduped, canvasWidth: size.width)
-                let horizontallyMerged = Self.mergeAdjacent(deduped, columnIds: columnIds)
-                let paragraphs = Self.mergeParagraphs(horizontallyMerged)
-                continuation.resume(returning: paragraphs)
+                continuation.resume(returning: boxes)
             }
-
             request.recognitionLevel = .accurate
             request.usesLanguageCorrection = true
-            request.automaticallyDetectsLanguage = true
-            if !languageHints.isEmpty {
-                request.recognitionLanguages = languageHints
+            request.automaticallyDetectsLanguage = autoDetect
+            if !recognitionLanguages.isEmpty {
+                request.recognitionLanguages = recognitionLanguages
             }
-
             let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
             do {
                 try handler.perform([request])
@@ -80,6 +100,26 @@ struct OCRService: Sendable {
                 continuation.resume(throwing: error)
             }
         }
+    }
+
+    /// Merge boxes from two OCR passes. Keep all boxes from `primary`; from
+    /// `secondary`, only add boxes that don't already heavily overlap with
+    /// a primary box (small overlap is fine — different observations of the
+    /// same line, deduplicate later).
+    private static func unionBoxes(
+        _ primary: [RecognizedTextBox],
+        with secondary: [RecognizedTextBox]
+    ) -> [RecognizedTextBox] {
+        var combined = primary
+        for box in secondary {
+            let alreadyCovered = primary.contains { existing in
+                overlapRatio(existing.rect, box.rect) > 0.6
+            }
+            if !alreadyCovered {
+                combined.append(box)
+            }
+        }
+        return combined
     }
 
     // MARK: - Deduplication
