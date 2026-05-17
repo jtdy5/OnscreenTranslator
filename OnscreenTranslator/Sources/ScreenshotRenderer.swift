@@ -226,9 +226,16 @@ struct ScreenshotRenderer: Sendable {
             attributes[.paragraphStyle] = paragraph
         }
 
+        // Vertically center for boxes that closely match the text height
+        // (single-line translations look natural sitting where the source
+        // text was). For tall merged paragraphs — where the Chinese is much
+        // more compact than the original — center wastes the rect; align to
+        // the top so the translation starts where the source paragraph did.
+        let slack = rect.height - measured.height
+        let yOffset: CGFloat = slack > measured.height ? 0 : max(0, slack / 2)
         let drawRect = CGRect(
             x: rect.minX,
-            y: rect.minY + max(0, (rect.height - measured.height) / 2),
+            y: rect.minY + yOffset,
             width: rect.width,
             height: rect.height
         )
