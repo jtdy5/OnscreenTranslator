@@ -30,7 +30,16 @@ struct OCRService: Sendable {
                 recognitionLanguages: ["th-TH"],
                 autoDetect: false
             )
-            combined = Self.unionBoxes(combined, with: secondPass)
+            // Force-Thai OCR will hallucinate Thai-looking glyphs for any
+            // non-Thai text it sees (a "查看翻译" Chinese UI label comes back
+            // as "iTi##:" or similar garbage). Only union boxes whose text
+            // actually contains Thai script — anything pure-Latin / pure-
+            // Han from pass 2 is either a misread or already covered by
+            // pass 1's auto-detect run.
+            let thaiOnly = secondPass.filter { box in
+                box.text.unicodeScalars.contains { (0x0E00...0x0E7F).contains($0.value) }
+            }
+            combined = Self.unionBoxes(combined, with: thaiOnly)
         }
 
         let deduped = Self.deduplicate(combined)
