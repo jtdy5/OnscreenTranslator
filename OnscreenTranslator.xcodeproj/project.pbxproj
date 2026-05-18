@@ -11,6 +11,7 @@
 		0B497BFEF441579432A41B19 /* ImageScaler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23FB1C1EB60EAFFA22C617CC /* ImageScaler.swift */; };
 		0C5EEBCE678CB26C88B5C6E4 /* OnscreenTranslatorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 361BB8BD39811DD78241A719 /* OnscreenTranslatorApp.swift */; };
 		1300916E2211CBC64E757806 /* OCRService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 888AFB0758FBEBC9A2570E94 /* OCRService.swift */; };
+		1A550D9AE3B5142C95CB75B9 /* DebugArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02F92822D9FAB1C150B2A223 /* DebugArchive.swift */; };
 		497BF24A9F9DDC5A87B4A14C /* TranslationPipelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1714539EFB9970EB4286C422 /* TranslationPipelineTests.swift */; };
 		576DC7CB8446C3B1A9711BE1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 71F9D62A6655376ACF35E765 /* Assets.xcassets */; };
 		5FAED2BBAC6BDF4AB26EBEEA /* TranslationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75BC60C773FE6D5B80B56CFF /* TranslationService.swift */; };
@@ -41,6 +42,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		02F92822D9FAB1C150B2A223 /* DebugArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugArchive.swift; sourceTree = "<group>"; };
 		12E22FFD83DAC8A84DCD8DF6 /* OnscreenTranslator.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = OnscreenTranslator.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1714539EFB9970EB4286C422 /* TranslationPipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationPipelineTests.swift; sourceTree = "<group>"; };
 		18F2445ED595B846A64D312C /* ScreenshotRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotRenderer.swift; sourceTree = "<group>"; };
@@ -107,6 +109,7 @@
 				80FB3A73D7E5400662BFCEC6 /* AppleTranslationCoordinator.swift */,
 				A447EA27A49ECAAD734DE7B8 /* AppleTranslationService.swift */,
 				637E50554A396F8AC1E08236 /* ContentView.swift */,
+				02F92822D9FAB1C150B2A223 /* DebugArchive.swift */,
 				23FB1C1EB60EAFFA22C617CC /* ImageScaler.swift */,
 				28B66EE0A3870A7F32AE5173 /* KeychainStore.swift */,
 				73FC8E6828ACD3E7FAA7FFBA /* LanguageDetector.swift */,
@@ -259,6 +262,7 @@
 				EB93DD8B3547A06E253F16CF /* AppleTranslationCoordinator.swift in Sources */,
 				A3AB222651F9347DBEBF0160 /* AppleTranslationService.swift in Sources */,
 				E5D88D32BB5598293BDC60DB /* ContentView.swift in Sources */,
+				1A550D9AE3B5142C95CB75B9 /* DebugArchive.swift in Sources */,
 				0B497BFEF441579432A41B19 /* ImageScaler.swift in Sources */,
 				D645CA22B70B425F5BE0F19D /* KeychainStore.swift in Sources */,
 				A0E72764F0FFF1048807C132 /* LanguageDetector.swift in Sources */,

@@ -192,24 +192,6 @@ private struct TranslateView: View {
             let result = try await BoxTranslator.translate(boxes: boxes, settings: settingsSnapshot)
 
             stage = .rendering
-            // Dump per-box OCR/translation info to Documents so the user can
-            // airdrop `last-ocr-diagnostic.txt` when reporting device-only
-            // rendering issues.
-            do {
-                var lines: [String] = ["# OCR diagnostic — \(Date())"]
-                for (i, (box, t)) in zip(boxes, result.translations).enumerated() {
-                    let flag = result.skipped.contains(i) ? "skip" : "    "
-                    let r = String(format: "(%4.0f,%4.0f %4.0fx%4.0f)",
-                                   box.rect.minX, box.rect.minY, box.rect.width, box.rect.height)
-                    let s = box.text.replacingOccurrences(of: "\n", with: "\\n")
-                    let d = t.replacingOccurrences(of: "\n", with: "\\n")
-                    lines.append("[\(String(format: "%2d", i))] \(flag) \(r) \(s) → \(d)")
-                }
-                let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-                if let url = docs?.appendingPathComponent("last-ocr-diagnostic.txt") {
-                    try? lines.joined(separator: "\n").data(using: .utf8)?.write(to: url, options: .atomic)
-                }
-            }
             let renderedCG = try ScreenshotRenderer().render(
                 source: workingCG,
                 boxes: boxes,
@@ -217,6 +199,18 @@ private struct TranslateView: View {
                 skippedIndices: result.skipped
             )
             let image = UIImage(cgImage: renderedCG, scale: working.scale, orientation: working.imageOrientation)
+            // Persist source + output + OCR diagnostic to a timestamped
+            // folder under Documents/runs/ so the user can collect multiple
+            // device-side test cases and share them in one go for debugging.
+            DebugArchive.save(
+                source: working,
+                output: image,
+                boxes: boxes,
+                translations: result.translations,
+                skipped: result.skipped,
+                targetLanguage: settingsSnapshot.targetLanguage,
+                entryPoint: "in-app"
+            )
             outputImage = image
             try history.add(
                 outputImage: image,

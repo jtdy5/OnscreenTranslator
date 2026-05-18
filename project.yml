@@ -28,6 +28,8 @@ targets:
         NSPhotoLibraryUsageDescription: Select screenshots to translate them manually.
         NSPhotoLibraryAddUsageDescription: Save translated screenshots back to your photo library.
         GeminiAPIKey: $(GEMINI_API_KEY)
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.onscreentranslator
