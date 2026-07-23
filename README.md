@@ -6,6 +6,7 @@
     <img alt="Platform: iOS 18+" src="https://img.shields.io/badge/iOS-18%2B-000000?logo=apple">
     <img alt="Swift 5" src="https://img.shields.io/badge/Swift-5-F05138?logo=swift&logoColor=white">
     <img alt="Built with SwiftUI" src="https://img.shields.io/badge/UI-SwiftUI-0D96F6">
+    <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-green.svg"></a>
   </p>
 </div>
 
@@ -172,3 +173,7 @@ Issues and focused pull requests are welcome. When reporting OCR or rendering
 problems, include the source screenshot, target language, and a description of
 the expected result. Remove personal or sensitive information before uploading
 screenshots.
+
+## License
+
+Onscreen Translator is available under the [MIT License](LICENSE).
