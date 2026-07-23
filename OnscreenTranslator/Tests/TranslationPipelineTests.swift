@@ -57,13 +57,71 @@ final class TranslationPipelineTests: XCTestCase {
         XCTAssertTrue(LanguageDetector.shouldSkipTranslation("฿164"))
         XCTAssertTrue(LanguageDetector.shouldSkipTranslation("123,456"))
         XCTAssertTrue(LanguageDetector.shouldSkipTranslation("50%"))
+        XCTAssertTrue(LanguageDetector.shouldSkipTranslation("ล 72"))
+        XCTAssertTrue(LanguageDetector.shouldSkipTranslation("A12"))
         XCTAssertTrue(LanguageDetector.shouldSkipTranslation("https://example.com/path"))
         XCTAssertTrue(LanguageDetector.shouldSkipTranslation("user@example.com"))
         XCTAssertTrue(LanguageDetector.shouldSkipTranslation("#hashtag"))
         XCTAssertTrue(LanguageDetector.shouldSkipTranslation("@handle"))
+        XCTAssertFalse(LanguageDetector.shouldSkipTranslation("@cosmeベストコスメアワード2025"))
         XCTAssertFalse(LanguageDetector.shouldSkipTranslation("Hello world"))
         XCTAssertFalse(LanguageDetector.shouldSkipTranslation("สวัสดี"))
+        XCTAssertFalse(LanguageDetector.shouldSkipTranslation("ห้อง 2"))
         XCTAssertFalse(LanguageDetector.shouldSkipTranslation("总金额 ฿164"))
+    }
+
+    func testChineseReadersStillTranslateJapaneseKana() {
+        let texts = [
+            "最近気になる肌悩みは？",
+            "ハリのなさ",
+            "乾燥",
+            "总金额",
+            "English label"
+        ]
+        let indices = LanguageDetector.indicesToTranslate(
+            in: texts,
+            understood: ["zh-Hans", "en"]
+        )
+        XCTAssertEqual(indices, [0, 1])
+    }
+
+    func testJapaneseReadersUnderstandAllJapaneseScripts() {
+        let texts = ["肌", "ひらがな", "カタカナ", "สวัสดี"]
+        let indices = LanguageDetector.indicesToTranslate(
+            in: texts,
+            understood: ["ja", "en"]
+        )
+        XCTAssertEqual(indices, [3])
+    }
+
+    func testRendererIgnoresNonFiniteGlyphRects() throws {
+        let context = try XCTUnwrap(CGContext(
+            data: nil,
+            width: 200,
+            height: 100,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        context.setFillColor(UIColor.white.cgColor)
+        context.fill(CGRect(x: 0, y: 0, width: 200, height: 100))
+        let image = try XCTUnwrap(context.makeImage())
+        let box = RecognizedTextBox(
+            text: "テスト",
+            confidence: 1,
+            rect: CGRect(x: 20, y: 20, width: 100, height: 30),
+            glyphRects: [
+                CGRect(x: CGFloat.nan, y: 20, width: 10, height: 20),
+                CGRect(x: 20, y: 20, width: 10, height: 20)
+            ]
+        )
+
+        XCTAssertNoThrow(try ScreenshotRenderer().render(
+            source: image,
+            boxes: [box],
+            translations: ["测试"]
+        ))
     }
 
     func testLanguageDetectorDominantScript() {

@@ -93,6 +93,20 @@ enum LanguageDetector {
            }) {
             return true
         }
+        // Short letter+number tokens are overwhelmingly status-bar OCR
+        // artifacts ("ล 72" from the cellular/battery icons) or product/model
+        // codes. Translating them replaces the battery indicator with an
+        // opaque mask. Limit this to one or two letters so real labels such as
+        // "ห้อง 2" still go through translation.
+        let compact = trimmed.replacingOccurrences(of: " ", with: "")
+        let scalars = compact.unicodeScalars
+        let letterCount = scalars.filter { CharacterSet.letters.contains($0) }.count
+        let digitCount = scalars.filter { CharacterSet.decimalDigits.contains($0) }.count
+        if (1...2).contains(letterCount),
+           (1...3).contains(digitCount),
+           compact.count <= 7 {
+            return true
+        }
         // URLs / emails / handles.
         if trimmed.lowercased().hasPrefix("http://") || trimmed.lowercased().hasPrefix("https://") {
             return true
@@ -103,7 +117,13 @@ enum LanguageDetector {
         }
         if trimmed.hasPrefix("#") || trimmed.hasPrefix("@") {
             let body = String(trimmed.dropFirst())
-            if body.unicodeScalars.allSatisfy({ CharacterSet.alphanumerics.contains($0) || $0 == "_" }) {
+            // Social handles are ASCII identifiers. Treating every Unicode
+            // letter as handle-safe makes strings such as
+            // "@cosmeベストコスメアワード2025" skip their Japanese text.
+            if body.unicodeScalars.allSatisfy({
+                $0.value < 128
+                    && (CharacterSet.alphanumerics.contains($0) || $0 == "_")
+            }) {
                 return true
             }
         }
@@ -132,7 +152,14 @@ enum LanguageDetector {
         allowedDetectionLanguages: [String] = []
     ) -> [Int] {
         _ = allowedDetectionLanguages   // accepted for API compatibility; unused
-        let understoodScripts = Set(understood.map { expectedScript(forLanguageCode: $0) })
+        var understoodScripts = Set<Script>()
+        for code in understood {
+            if baseCode(code) == "ja" {
+                understoodScripts.formUnion([.han, .hiragana, .katakana])
+            } else {
+                understoodScripts.insert(expectedScript(forLanguageCode: code))
+            }
+        }
         return texts.indices.filter { i in
             let text = texts[i]
             if shouldSkipTranslation(text) { return false }
@@ -143,23 +170,16 @@ enum LanguageDetector {
     /// True if any letter / CJK glyph in `text` belongs to a script outside the
     /// understood set. Cyrillic when the user only reads Latin+Han, Thai when
     /// the user reads Latin+Han, etc. Non-letter characters (digits, symbols,
-    /// punctuation) are ignored. Han / Hiragana / Katakana are folded together
-    /// for "CJK" purposes, so Japanese text is correctly classified as foreign
-    /// for a Chinese-only user.
+    /// punctuation) are ignored. Han, Hiragana, and Katakana remain distinct:
+    /// a Chinese reader understands Han text but should still have Japanese
+    /// kana translated. Japanese readers are handled by explicitly adding all
+    /// three Japanese scripts to their understood set.
     private static func containsScriptOutside(_ understood: Set<Script>, in text: String) -> Bool {
-        // Treat understood scripts plus their CJK siblings as known: someone
-        // who understands Chinese will also recognise Han glyphs that appear
-        // in Japanese, and vice versa for kana variants.
-        var allowed = understood
-        let cjk: Set<Script> = [.han, .hiragana, .katakana]
-        if !allowed.isDisjoint(with: cjk) {
-            allowed.formUnion(cjk)
-        }
         for scalar in text.unicodeScalars {
             guard CharacterSet.letters.contains(scalar) || isCJK(scalar) else { continue }
             let script = scriptOf(scalar)
             if script == .unknown { continue }
-            if !allowed.contains(script) {
+            if !understood.contains(script) {
                 return true
             }
         }

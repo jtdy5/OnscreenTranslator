@@ -37,9 +37,42 @@ struct OCRService: Sendable {
             // Han from pass 2 is either a misread or already covered by
             // pass 1's auto-detect run.
             let thaiOnly = secondPass.filter { box in
-                box.text.unicodeScalars.contains { (0x0E00...0x0E7F).contains($0.value) }
+                Self.containsThai(box.text)
+                    // The dedicated Thai recognizer commonly hallucinates the
+                    // signal/battery icons as Thai glyphs. The top 6% is the
+                    // iPhone status-bar safe area, never page content.
+                    && box.rect.minY >= size.height * 0.06
             }
             combined = Self.unionBoxes(combined, with: thaiOnly)
+
+            // A full-height Vision request can silently omit lines from dense
+            // Thai paragraphs. If either pass found a tall Thai block, rerun
+            // just that vertical region as overlapping strips. The tighter
+            // crops give Vision enough resolution/context to recover the
+            // missing middle lines without adding several OCR passes to normal
+            // product/chat screenshots.
+            let tallThreshold = size.height * 0.12
+            let tallThai = combined.filter {
+                Self.containsThai($0.text) && $0.rect.height >= tallThreshold
+            }
+            if !tallThai.isEmpty {
+                let regionTop = max(0, tallThai.map(\.rect.minY).min()! - 40)
+                let regionBottom = min(size.height, tallThai.map(\.rect.maxY).max()! + 40)
+                let tiledThai = try await tiledThaiBoxes(
+                    in: cgImage,
+                    imageSize: size,
+                    region: regionTop..<regionBottom
+                )
+                if !tiledThai.isEmpty {
+                    // Replace only tall Thai observations. Keeping them as
+                    // well would render overlapping translations on top of the
+                    // more complete tiled paragraph.
+                    combined.removeAll {
+                        Self.containsThai($0.text) && $0.rect.height >= tallThreshold
+                    }
+                    combined = Self.unionBoxes(combined, with: tiledThai)
+                }
+            }
         }
 
         let deduped = Self.deduplicate(combined)
@@ -47,6 +80,55 @@ struct OCRService: Sendable {
         let horizontallyMerged = Self.mergeAdjacent(deduped, columnIds: columnIds)
         let paragraphs = Self.mergeParagraphs(horizontallyMerged)
         return paragraphs
+    }
+
+    /// OCR a dense Thai vertical region as overlapping horizontal strips and
+    /// convert each crop-local rectangle back to full-image coordinates.
+    private func tiledThaiBoxes(
+        in cgImage: CGImage,
+        imageSize: CGSize,
+        region: Range<CGFloat>
+    ) async throws -> [RecognizedTextBox] {
+        let tileHeight = min(max(imageSize.height * 0.24, 420), 720)
+        let overlap = min(120, tileHeight * 0.2)
+        let step = max(1, tileHeight - overlap)
+        var y = region.lowerBound
+        var boxes: [RecognizedTextBox] = []
+
+        while y < region.upperBound {
+            let bottom = min(region.upperBound, y + tileHeight)
+            let cropRect = CGRect(
+                x: 0,
+                y: floor(y),
+                width: imageSize.width,
+                height: ceil(bottom - y)
+            ).intersection(CGRect(origin: .zero, size: imageSize))
+            guard cropRect.height > 0, let crop = cgImage.cropping(to: cropRect) else {
+                break
+            }
+            let localSize = CGSize(width: crop.width, height: crop.height)
+            let local = try await rawBoxes(
+                in: crop,
+                size: localSize,
+                recognitionLanguages: ["th-TH"],
+                autoDetect: false
+            )
+            for box in local where Self.containsThai(box.text) {
+                let offset = CGPoint(x: cropRect.minX, y: cropRect.minY)
+                boxes.append(RecognizedTextBox(
+                    id: box.id,
+                    text: box.text,
+                    confidence: box.confidence,
+                    rect: box.rect.offsetBy(dx: offset.x, dy: offset.y),
+                    glyphRects: box.glyphRects.map {
+                        $0.offsetBy(dx: offset.x, dy: offset.y)
+                    }
+                ))
+            }
+            if bottom >= region.upperBound { break }
+            y += step
+        }
+        return Self.deduplicate(boxes)
     }
 
     /// Run a single Vision OCR pass and return the post-filter raw boxes.
@@ -112,9 +194,11 @@ struct OCRService: Sendable {
     }
 
     /// Merge boxes from two OCR passes. Keep all boxes from `primary`; from
-    /// `secondary`, only add boxes that don't already heavily overlap with
-    /// a primary box (small overlap is fine — different observations of the
-    /// same line, deduplicate later).
+    /// `secondary`, only add boxes that don't already heavily overlap with a
+    /// primary box. The forced-language pass hallucinates Thai glyphs over
+    /// Japanese and keyboard text, so spatially covered observations must stay
+    /// owned by the auto-detected primary pass. Dense Thai paragraphs use the
+    /// tiled replacement path above instead of relying on overlapping boxes.
     private static func unionBoxes(
         _ primary: [RecognizedTextBox],
         with secondary: [RecognizedTextBox]
@@ -129,6 +213,10 @@ struct OCRService: Sendable {
             }
         }
         return combined
+    }
+
+    private static func containsThai(_ text: String) -> Bool {
+        text.unicodeScalars.contains { (0x0E00...0x0E7F).contains($0.value) }
     }
 
     // MARK: - Deduplication
@@ -537,11 +625,29 @@ struct OCRService: Sendable {
     }
 
     private static func textSimilarity(_ a: String, _ b: String) -> Double {
-        let setA = Set(a.unicodeScalars)
-        let setB = Set(b.unicodeScalars)
-        let intersection = setA.intersection(setB).count
-        let union = setA.union(setB).count
-        return union == 0 ? 0 : Double(intersection) / Double(union)
+        func normalizedScalars(_ text: String) -> [UInt32] {
+            text.lowercased().unicodeScalars.compactMap {
+                CharacterSet.alphanumerics.contains($0) ? $0.value : nil
+            }
+        }
+        func trigrams(_ values: [UInt32]) -> Set<String> {
+            guard values.count >= 3 else {
+                return Set(values.map(String.init))
+            }
+            return Set((0...(values.count - 3)).map {
+                "\(values[$0]):\(values[$0 + 1]):\(values[$0 + 2])"
+            })
+        }
+
+        let setA = trigrams(normalizedScalars(a))
+        let setB = trigrams(normalizedScalars(b))
+        let smaller = min(setA.count, setB.count)
+        guard smaller > 0 else { return 0 }
+        // Use overlap relative to the shorter text: an OCR line contained in
+        // a paragraph is a duplicate even though the paragraph has many more
+        // trigrams, while two unrelated Thai lines no longer look similar
+        // merely because they use the same alphabet.
+        return Double(setA.intersection(setB).count) / Double(smaller)
     }
 
     // MARK: - Glyph rects
@@ -562,7 +668,12 @@ struct OCRService: Sendable {
             let next = candidate.string.index(after: cursor)
             if let observation = (try? candidate.boundingBox(for: cursor..<next)).flatMap({ $0 }) {
                 let pixel = pixelRect(from: observation.boundingBox, imageSize: imageSize)
-                if pixel.width > 0, pixel.height > 0 {
+                if pixel.origin.x.isFinite,
+                   pixel.origin.y.isFinite,
+                   pixel.width.isFinite,
+                   pixel.height.isFinite,
+                   pixel.width > 0,
+                   pixel.height > 0 {
                     rects.append(pixel)
                 }
             }
