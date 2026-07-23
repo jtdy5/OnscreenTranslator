@@ -1,71 +1,174 @@
-# Onscreen Translator
+<div align="center">
+  <img src="OnscreenTranslator/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-180.png" width="112" alt="Onscreen Translator app icon">
+  <h1>Onscreen Translator</h1>
+  <p><strong>Translate what is on your iPhone screen with a Shortcut.</strong></p>
+  <p>
+    <img alt="Platform: iOS 18+" src="https://img.shields.io/badge/iOS-18%2B-000000?logo=apple">
+    <img alt="Swift 5" src="https://img.shields.io/badge/Swift-5-F05138?logo=swift&logoColor=white">
+    <img alt="Built with SwiftUI" src="https://img.shields.io/badge/UI-SwiftUI-0D96F6">
+  </p>
+</div>
 
-SwiftUI iOS MVP for screenshot-based onscreen translation through Apple Vision, Apple Translation, and Shortcuts.
+Onscreen Translator turns a screenshot into a translated image while preserving
+the original layout. Trigger it from any app with the Action Button or Back Tap,
+or choose an image manually inside the app.
 
-The app does not modify another app's live UI. iOS does not allow ordinary App Store apps to read and replace another app's screen contents directly. Instead, the Shortcut takes a screenshot, this app runs OCR and translation, then returns a translated PNG where recognized text regions are covered and redrawn in the target language.
+It combines Apple Vision OCR, Apple Translation, App Intents, and a lightweight
+renderer that replaces recognized text in place. No screen recording, jailbreak,
+or private iOS APIs are required.
 
-## What Is Implemented
+## See it in action
 
-- SwiftUI app with Translate, History, and Settings tabs.
-- App Intent: `Translate Current Screenshot`, exposed to Shortcuts.
-- On-device OCR using Apple Vision `VNRecognizeTextRequest`.
-- OCR language hints for mixed screenshots, defaulting to Thai, Simplified Chinese, English, Japanese, and Korean.
-- Manual in-app translation using Apple's `Translation.framework` on iOS 18+.
-- Shortcut intent fallback through an OpenAI-compatible chat completions endpoint.
-- Secure API key storage in Keychain.
-- Screenshot renderer that preserves image size, masks recognized text boxes, and draws translated text into the original regions.
-- Manual screenshot picker for testing without Shortcuts.
+<table>
+  <tr>
+    <th width="50%">Before — Thai</th>
+    <th width="50%">After — Simplified Chinese</th>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/weather-before.png" alt="Thai weather warning before translation"></td>
+    <td><img src="docs/screenshots/weather-after.png" alt="Weather warning translated into Simplified Chinese"></td>
+  </tr>
+</table>
 
-## Shortcut Setup
+<p align="center">
+  <img src="docs/screenshots/cosme-after.png" width="31%" alt="Japanese cosmetics post translated into Simplified Chinese">
+  &nbsp;
+  <img src="docs/screenshots/skin-analyzer-after.png" width="31%" alt="Japanese skin analyzer translated into Simplified Chinese">
+</p>
 
-Create a Shortcut named `Translate Screen` like this:
+The examples above are real renderer output. Results vary with text size,
+contrast, typography, and the language pair.
 
-1. `Take Screenshot`
-2. `Translate Current Screenshot`
-   - Set `Screenshot` to the screenshot output from step 1.
-   - Optionally set `Target Language`, or leave it blank to use the app setting.
-3. `Quick Look`
-   - Quick Look the translated file returned by the app intent.
+## Highlights
 
-When you run this Shortcut from another app, iOS captures the visible screen, the app intent OCRs/translates/renders it, and Quick Look opens the rendered translated PNG. This is the closest App Store-safe behavior to "translate the current app screen"; iOS still does not let this app draw directly over another app's live UI.
+- **Translate from any app** through the `Translate Current Screenshot` App Intent.
+- **Preserve the screen layout** by masking OCR regions and drawing translations
+  back into their original positions.
+- **Prefer on-device processing** with Apple Vision and Apple Translation.
+- **Use a cloud fallback** through an OpenAI-compatible chat-completions endpoint
+  when an on-device language pair is unavailable.
+- **Handle mixed-language screens** with configurable OCR language hints.
+- **Review past results** from the built-in translation history.
+- **Keep credentials private** in the iOS Keychain.
 
-If Shortcuts says it is unable to translate, test the same screenshot inside the app first. Apple Translation may fail when the language pair is unsupported or not installed. Install the relevant languages in Apple's Translate app, or add a cloud API key in this app's Settings to enable fallback.
+## Requirements
 
-Trigger options:
+- iPhone running iOS 18 or later
+- Xcode 16 or later for development
+- Apple Translation language models installed for fully on-device translation
+- Optional Gemini or other OpenAI-compatible API key for cloud fallback
 
-- iPhone 15 Pro or newer: Settings -> Action Button -> Shortcut.
-- Other supported iPhones: Settings -> Accessibility -> Touch -> Back Tap -> choose the Shortcut.
-- Share Sheet/manual path: open the app and use `Choose Screenshot`.
+## Quick start
 
-## Translation Settings
+1. Clone the repository and open `OnscreenTranslator.xcodeproj` in Xcode.
+2. Select the **OnscreenTranslator** target.
+3. Under **Signing & Capabilities**, choose your Development Team and set a
+   unique bundle identifier.
+4. Build and run on an iPhone.
+5. In the app's **Settings** tab, choose a target language. Add a cloud API key
+   only if you want fallback translation.
 
-Open the app's Settings tab and configure:
-
-- Target language, for example `Chinese`, `English`, or `Thai`.
-- Target language code, default: `zh-Hans`.
-- Endpoint, default: `https://api.openai.com/v1/chat/completions`.
-- Model, default: `gpt-4.1-mini`.
-- OCR language hints, default: `th-TH,zh-Hans,en-US,ja-JP,ko-KR`.
-- API key.
-
-Manual screenshot translation in the app uses Apple Translation on iOS 18+. The Shortcut intent also tries Apple Translation on iOS 26+ when the source language model is installed; otherwise it falls back to the configured cloud endpoint.
-
-The OCR pass scans the whole screenshot, including text embedded inside restaurant photos, ad banners, and promo cards. Complex stylized text may be less reliable than native UI text because it depends on Apple Vision's OCR confidence and the background contrast.
-
-## Build
-
-This project targets iOS 18+ because the manual path uses Apple's Translation framework.
-
-Generate the Xcode project:
+The checked-in Xcode project is ready to open. If you change `project.yml`,
+regenerate it with [XcodeGen](https://github.com/yonaskolb/XcodeGen):
 
 ```sh
 xcodegen generate
 ```
 
-Build without signing:
+## Create the Shortcut
 
-```sh
-xcodebuild -project OnscreenTranslator.xcodeproj -scheme OnscreenTranslator -destination 'generic/platform=iOS' -derivedDataPath ./DerivedData build CODE_SIGNING_ALLOWED=NO
+Create a Shortcut named **Translate Screen** with these three actions:
+
+1. **Take Screenshot**
+2. **Translate Current Screenshot**
+   - Pass the screenshot from step 1 to **Screenshot**.
+   - Optionally choose a target language; leave it blank to use the app setting.
+3. **Quick Look**
+   - Pass the translated file from step 2 to Quick Look.
+
+Then assign it to one of these triggers:
+
+- **Action Button:** Settings → Action Button → Shortcut
+- **Back Tap:** Settings → Accessibility → Touch → Back Tap
+- **Manual:** open Onscreen Translator and tap **Choose Screenshot**
+
+When triggered, iOS captures the visible screen, the App Intent recognizes and
+translates its text, and Quick Look presents the rendered image.
+
+> [!NOTE]
+> iOS does not allow regular App Store apps to read or draw over another app's
+> live interface. This project uses the screenshot-and-Quick-Look flow as the
+> closest public-API alternative.
+
+## Translation settings
+
+The defaults are ready for Thai, Simplified Chinese, English, Japanese, and
+Korean OCR. You can change:
+
+| Setting | Default |
+| --- | --- |
+| Target language | Chinese (`zh-Hans`) |
+| Prefer on-device translation | Enabled |
+| Cloud endpoint | Gemini OpenAI-compatible endpoint |
+| Cloud model | `gemini-2.5-flash` |
+| OCR language hints | `th-TH, zh-Hans, en-US, ja-JP, ko-KR` |
+
+To provide a development-only Gemini key at build time, create
+`OnscreenTranslator/Config/Secrets.xcconfig`:
+
+```xcconfig
+GEMINI_API_KEY = your_key_here
 ```
 
-For a real device, open `OnscreenTranslator.xcodeproj`, set your Development Team and bundle identifier, then run on iPhone.
+That file is ignored by Git. You can also enter the key in the app, where it is
+stored in Keychain.
+
+## How it works
+
+```text
+Screenshot
+    ↓
+Apple Vision OCR
+    ↓
+Language filtering and paragraph grouping
+    ↓
+Apple Translation ── or ── OpenAI-compatible fallback
+    ↓
+Background-aware text replacement
+    ↓
+Translated PNG
+```
+
+The OCR pass scans the entire screenshot, including text inside photos, banners,
+and promotional cards. Stylized or low-contrast text is naturally harder than
+native UI text.
+
+## Build from the command line
+
+```sh
+xcodebuild \
+  -project OnscreenTranslator.xcodeproj \
+  -scheme OnscreenTranslator \
+  -destination 'generic/platform=iOS' \
+  -derivedDataPath ./DerivedData \
+  build CODE_SIGNING_ALLOWED=NO
+```
+
+## Project structure
+
+```text
+OnscreenTranslator/
+├── Sources/       SwiftUI app, OCR, translation, and rendering
+├── Resources/     Info.plist and app icon
+├── Tests/         Translation pipeline tests and fixtures
+└── Config/        Shared Xcode configuration
+Tools/
+└── RenderPreview/ macOS command-line renderer preview
+```
+
+## Contributing
+
+Issues and focused pull requests are welcome. When reporting OCR or rendering
+problems, include the source screenshot, target language, and a description of
+the expected result. Remove personal or sensitive information before uploading
+screenshots.
