@@ -412,7 +412,8 @@ struct ScreenshotRenderer: Sendable {
         let height = image.height
         let totalBytes = CFDataGetLength(data)
 
-        if !box.glyphRects.isEmpty, let palette = Self.glyphBoundedPalette(
+        let finiteGlyphs = box.glyphRects.filter(Self.isFiniteRect)
+        if !finiteGlyphs.isEmpty, let palette = Self.glyphBoundedPalette(
             bytes: bytes,
             totalBytes: totalBytes,
             bytesPerPixel: bytesPerPixel,
@@ -420,7 +421,7 @@ struct ScreenshotRenderer: Sendable {
             imageWidth: width,
             imageHeight: height,
             outer: box.rect,
-            glyphs: box.glyphRects
+            glyphs: finiteGlyphs
         ) {
             return palette
         }
@@ -449,9 +450,12 @@ struct ScreenshotRenderer: Sendable {
         var fgSamples: [(r: Int, g: Int, b: Int, lum: CGFloat)] = []
         var bgSamples: [(r: Int, g: Int, b: Int, lum: CGFloat)] = []
 
-        for glyph in glyphs {
+        for glyph in glyphs where isFiniteRect(glyph) {
             let inset = max(1, min(glyph.width, glyph.height) * 0.15)
             let inner = glyph.insetBy(dx: inset, dy: inset)
+            guard isFiniteRect(inner), inner.width > 0, inner.height > 0 else {
+                continue
+            }
             let strideX = max(1, Int(inner.width / 4))
             let strideY = max(1, Int(inner.height / 3))
             var y = max(0, Int(inner.minY))
@@ -504,6 +508,13 @@ struct ScreenshotRenderer: Sendable {
             return nil
         }
         return ColorPalette(foreground: fg.color, background: bg.color)
+    }
+
+    private static func isFiniteRect(_ rect: CGRect) -> Bool {
+        rect.origin.x.isFinite
+            && rect.origin.y.isFinite
+            && rect.width.isFinite
+            && rect.height.isFinite
     }
 
     private static func boxedLuminancePalette(

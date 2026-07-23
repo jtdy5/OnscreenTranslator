@@ -40,6 +40,7 @@ struct RenderPreview {
                              Default: target,en)
             OCR_LANGUAGES   (comma-separated. Default: th-TH,en-US,zh-Hans,ja-JP,ko-KR)
             OUTPUT          (output PNG path. Default: /tmp/preview-<basename>.png)
+            OCR_ONLY=1      (print OCR/routing diagnostics without translating)
 
         """
         FileHandle.standardError.write(Data(msg.utf8))
@@ -86,6 +87,15 @@ struct RenderPreview {
         let texts = boxes.map(\.text)
         let toTranslate = LanguageDetector.indicesToTranslate(in: texts, understood: understood)
         let skipped = Set(0..<texts.count).subtracting(toTranslate)
+        if env["OCR_ONLY"] == "1" {
+            for (i, box) in boxes.enumerated() {
+                let tag = skipped.contains(i) ? "skip" : "    "
+                let rect = String(format: "(%4.0f,%4.0f %4.0fx%4.0f)",
+                                  box.rect.minX, box.rect.minY, box.rect.width, box.rect.height)
+                log("[\(String(format: "%2d", i))] \(tag) \(rect) src=\"\(box.text)\"")
+            }
+            return
+        }
         log("Translating \(toTranslate.count) (skipping \(skipped.count) in understood langs) …")
 
         var translations = texts
