@@ -16,8 +16,8 @@ targets:
       - path: OnscreenTranslator/Sources
       - path: OnscreenTranslator/Resources
     configFiles:
-      Debug: OnscreenTranslator/Config/Secrets.xcconfig
-      Release: OnscreenTranslator/Config/Secrets.xcconfig
+      Debug: OnscreenTranslator/Config/Base.xcconfig
+      Release: OnscreenTranslator/Config/Base.xcconfig
     info:
       path: OnscreenTranslator/Resources/Info.plist
       properties:
@@ -34,6 +34,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.onscreentranslator
         DEVELOPMENT_TEAM: ""
+        TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_PREVIEWS: YES
         ENABLE_TESTABILITY: YES

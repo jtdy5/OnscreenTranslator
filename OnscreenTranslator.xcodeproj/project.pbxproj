@@ -43,7 +43,7 @@
 
 /* Begin PBXFileReference section */
 		02F92822D9FAB1C150B2A223 /* DebugArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugArchive.swift; sourceTree = "<group>"; };
-		12E22FFD83DAC8A84DCD8DF6 /* OnscreenTranslator.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = OnscreenTranslator.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		12E22FFD83DAC8A84DCD8DF6 /* OnscreenTranslator.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OnscreenTranslator.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1714539EFB9970EB4286C422 /* TranslationPipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationPipelineTests.swift; sourceTree = "<group>"; };
 		18F2445ED595B846A64D312C /* ScreenshotRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotRenderer.swift; sourceTree = "<group>"; };
 		23FB1C1EB60EAFFA22C617CC /* ImageScaler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageScaler.swift; sourceTree = "<group>"; };
@@ -54,7 +54,7 @@
 		53AD16205226C8917519B7BC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		55DC114712DC29C841DC91AD /* SupportedLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportedLanguage.swift; sourceTree = "<group>"; };
 		637E50554A396F8AC1E08236 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		6D4F5789AC2A87007A5A32BC /* IMG_4746.PNG */ = {isa = PBXFileReference; path = IMG_4746.PNG; sourceTree = "<group>"; };
+		6D4F5789AC2A87007A5A32BC /* IMG_4746.PNG */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = IMG_4746.PNG; sourceTree = "<group>"; };
 		71F9D62A6655376ACF35E765 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		73FC8E6828ACD3E7FAA7FFBA /* LanguageDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageDetector.swift; sourceTree = "<group>"; };
 		75BC60C773FE6D5B80B56CFF /* TranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationService.swift; sourceTree = "<group>"; };
@@ -64,9 +64,9 @@
 		A447EA27A49ECAAD734DE7B8 /* AppleTranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleTranslationService.swift; sourceTree = "<group>"; };
 		A8FAAD02780E176E7F5AF294 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		BE55C0D4F6AB3D44D1BD7C51 /* TranslationPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationPipeline.swift; sourceTree = "<group>"; };
-		D99DA1EC0F3A7DC1B95E164A /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
-		EB3496812E09F08D9214FB2D /* IMG_4747.PNG */ = {isa = PBXFileReference; path = IMG_4747.PNG; sourceTree = "<group>"; };
-		F73996101F323D5D85F1A6A3 /* IMG_4780.PNG */ = {isa = PBXFileReference; path = IMG_4780.PNG; sourceTree = "<group>"; };
+		D99DA1EC0F3A7DC1B95E164A /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		EB3496812E09F08D9214FB2D /* IMG_4747.PNG */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = IMG_4747.PNG; sourceTree = "<group>"; };
+		F73996101F323D5D85F1A6A3 /* IMG_4780.PNG */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = IMG_4780.PNG; sourceTree = "<group>"; };
 		FC90936BB56CD98E8D38683D /* OnscreenTranslatorTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = OnscreenTranslatorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -141,7 +141,7 @@
 		9E2B8014D29424446EB39FFF /* Config */ = {
 			isa = PBXGroup;
 			children = (
-				D99DA1EC0F3A7DC1B95E164A /* Secrets.xcconfig */,
+				D99DA1EC0F3A7DC1B95E164A /* Base.xcconfig */,
 			);
 			name = Config;
 			path = OnscreenTranslator/Config;
@@ -196,9 +196,6 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
-					0292E223D7415AD0DB9EDB9E = {
-						DevelopmentTeam = "";
-					};
 					ED4F1BA96083662DAAD54FF5 = {
 						DevelopmentTeam = "";
 					};
@@ -302,7 +299,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.onscreentranslator.tests;
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OnscreenTranslator.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OnscreenTranslator";
 			};
 			name = Release;
@@ -374,11 +371,12 @@
 		};
 		93268ABA66B9B8EFBCCBEFAD /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = D99DA1EC0F3A7DC1B95E164A /* Secrets.xcconfig */;
+			baseConfigurationReference = D99DA1EC0F3A7DC1B95E164A /* Base.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = "";
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = K834WW3WC9;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_TESTABILITY = YES;
 				INFOPLIST_FILE = OnscreenTranslator/Resources/Info.plist;
@@ -386,9 +384,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.onscreentranslator;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yesheng.onscreentranslator;
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -405,18 +404,19 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.onscreentranslator.tests;
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OnscreenTranslator.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OnscreenTranslator";
 			};
 			name = Debug;
 		};
 		BCEA916F41A5FDC9F2892D84 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = D99DA1EC0F3A7DC1B95E164A /* Secrets.xcconfig */;
+			baseConfigurationReference = D99DA1EC0F3A7DC1B95E164A /* Base.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = "";
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = K834WW3WC9;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_TESTABILITY = YES;
 				INFOPLIST_FILE = OnscreenTranslator/Resources/Info.plist;
@@ -424,9 +424,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.onscreentranslator;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yesheng.onscreentranslator;
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};

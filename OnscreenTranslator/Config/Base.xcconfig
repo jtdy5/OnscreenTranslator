@@ -1,0 +1,5 @@
+// Keep CI builds working when the local secrets file is absent.
+GEMINI_API_KEY =
+
+// Developers can override the empty value with an ignored local file.
+#include? "Secrets.xcconfig"
