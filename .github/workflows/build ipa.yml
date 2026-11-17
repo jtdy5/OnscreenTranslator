@@ -1,48 +1,59 @@
 name: Build Unsigned IPA
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: macos-latest
-
     steps:
-      - name: Checkout repository
+      - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Install XcodeGen
-        run: brew install xcodegen
-
-      - name: Generate Xcode Project
-        run: xcodegen generate
-
-      - name: Build Archive (Unsigned)
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      - name: Show Xcode version
         run: |
-          xcodebuild archive \
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Archive app without code signing
+        run: |
+          set -euo pipefail
+          xcodebuild \
             -project OnscreenTranslator.xcodeproj \
             -scheme OnscreenTranslator \
             -configuration Release \
-            -archivePath $RUNNER_TEMP/OnscreenTranslator.xcarchive \
-            -sdk iphoneos \
-            GEMINI_API_KEY="$GEMINI_API_KEY" \
-            CODE_SIGN_IDENTITY="" \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/OnscreenTranslator.xcarchive" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGN_IDENTITY="" \
+            archive
 
-      - name: Package IPA
+      - name: Package and validate unsigned IPA
         run: |
-          mkdir -p $RUNNER_TEMP/Payload
-          cp -r $RUNNER_TEMP/OnscreenTranslator.xcarchive/Products/Applications/OnscreenTranslator.app $RUNNER_TEMP/Payload/
-          cd $RUNNER_TEMP
-          zip -r OnscreenTranslator.ipa Payload
+          set -euo pipefail
+          APP_PATH="$RUNNER_TEMP/OnscreenTranslator.xcarchive/Products/Applications/OnscreenTranslator.app"
+          IPA_DIR="$RUNNER_TEMP/ipa"
+          IPA_PATH="$RUNNER_TEMP/OnscreenTranslator-unsigned.ipa"
 
-      - name: Upload IPA Artifact
+          test -d "$APP_PATH"
+          mkdir -p "$IPA_DIR/Payload"
+          ditto "$APP_PATH" "$IPA_DIR/Payload/OnscreenTranslator.app"
+          (cd "$IPA_DIR" && /usr/bin/zip -qry "$IPA_PATH" Payload)
+          /usr/bin/unzip -t "$IPA_PATH"
+
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
           name: OnscreenTranslator-unsigned-ipa
-          path: ${{ runner.temp }}/OnscreenTranslator.ipa
+          path: ${{ runner.temp }}/OnscreenTranslator-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
