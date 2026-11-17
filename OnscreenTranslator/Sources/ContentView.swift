@@ -273,11 +273,11 @@ private struct ShortcutSetupSheet: View {
                     1. Tap Open Shortcuts.
                     2. Create a new shortcut and name it “Translate Screen.”
                     3. Add Take Screenshot.
-                    4. Add Translate Current Screenshot.
-                       Set Screenshot to the Take Screenshot result.
+                    4. Add Translate Current Screenshot directly after it.
+                       It will receive the screenshot automatically.
                        Leave Target Language blank to use this app's default.
                     5. Add Quick Look.
-                       Set Input to the translated file from step 4.
+                       Show the output from Translate Current Screenshot.
                     """)
                         .foregroundStyle(.secondary)
 

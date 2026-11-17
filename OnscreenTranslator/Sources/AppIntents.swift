@@ -7,7 +7,11 @@ struct TranslateCurrentScreenshotIntent: AppIntent {
     static let description = IntentDescription("Recognize text in a screenshot, translate it, and return a translated PNG.")
     static let openAppWhenRun = false
 
-    @Parameter(title: "Screenshot", description: "The image to translate.")
+    @Parameter(
+        title: "Screenshot",
+        description: "The image to translate.",
+        inputConnectionBehavior: .connectToPreviousIntentResult
+    )
     var screenshot: IntentFile
 
     @Parameter(title: "Target Language", description: "Override the app's default target language. Leave blank to use Settings.")

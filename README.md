@@ -87,13 +87,12 @@ Create a Shortcut named **Translate Screen** with these three actions:
 
 1. **Take Screenshot**
 2. **Translate Current Screenshot**
-   - In the action's **Screenshot** field, insert the **Screenshot** variable
-     produced by step 1 (do not leave it set to Choose or Ask).
-   - The Shortcuts action passes the image directly to Onscreen Translator.
+   - Place this directly after **Take Screenshot**; it receives that action's
+     image automatically.
    - Optionally choose a target language; leave it blank to use the app setting.
 3. **Quick Look**
-   - In Quick Look's **Input** field, insert the **Translated File** output
-     from step 2.
+   - Show the output from **Translate Current Screenshot**, not the original
+     screenshot.
 
 Then assign it to one of these triggers:
 
