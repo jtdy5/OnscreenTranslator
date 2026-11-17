@@ -35,12 +35,14 @@ private enum ProcessingStage: String {
 private struct TranslateView: View {
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var history: TranslationHistory
+    @Environment(\.openURL) private var openURL
     @State private var selectedItem: PhotosPickerItem?
     @State private var selectedImage: UIImage?
     @State private var outputImage: UIImage?
     @State private var stage: ProcessingStage?
     @State private var errorMessage: String?
     @State private var savedToPhotosToast = false
+    @State private var showingShortcutSetup = false
 
     private var isProcessing: Bool { stage != nil }
 
@@ -49,6 +51,14 @@ private struct TranslateView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     instructions
+
+                    Button {
+                        showingShortcutSetup = true
+                    } label: {
+                        Label("Add Shortcut", systemImage: "plus.rectangle.on.rectangle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
 
                     PhotosPicker(selection: $selectedItem, matching: .images) {
                         Label("Choose Screenshot", systemImage: "photo.on.rectangle")
@@ -90,6 +100,9 @@ private struct TranslateView: View {
                 .padding()
             }
             .navigationTitle("Onscreen Translator")
+            .sheet(isPresented: $showingShortcutSetup) {
+                ShortcutSetupSheet(openURL: openURL)
+            }
             .onChange(of: selectedItem) { _, newValue in
                 Task { await loadImage(from: newValue) }
             }
@@ -132,7 +145,7 @@ private struct TranslateView: View {
             Text("One-tap translation from any app")
                 .font(.headline)
             Text("""
-            1. Open Shortcuts → + → Add three actions:
+            1. Tap “Add Shortcut” below, then build these three actions:
                 • Take Screenshot
                 • Translate Current Screenshot (from this app)
                 • Quick Look
@@ -244,6 +257,68 @@ private struct TranslateView: View {
             return "Translation request failed: \(message.prefix(200))"
         default:
             return error.localizedDescription
+        }
+    }
+}
+
+private struct ShortcutSetupSheet: View {
+    let openURL: OpenURLAction
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Create in Shortcuts") {
+                    Text("""
+                    1. Tap Open Shortcuts.
+                    2. Create a new shortcut and name it “Translate Screen.”
+                    3. Add Take Screenshot.
+                    4. Add Translate Current Screenshot.
+                       Set Screenshot to the Take Screenshot result.
+                       Leave Target Language blank to use this app's default.
+                    5. Add Quick Look.
+                       Set Input to the translated file from step 4.
+                    """)
+                        .foregroundStyle(.secondary)
+
+                    Button {
+                        if let url = URL(string: "shortcuts://create-shortcut") {
+                            openURL(url)
+                        }
+                    } label: {
+                        Label("Open Shortcuts", systemImage: "arrow.up.forward.app")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+
+                Section("Use it") {
+                    Text("Bind “Translate Screen” to Action Button or Back Tap. Quick Look opens the translated image over the app you were using without returning to Onscreen Translator.")
+                        .foregroundStyle(.secondary)
+
+                    Button {
+                        var components = URLComponents(string: "shortcuts://run-shortcut")
+                        components?.queryItems = [
+                            URLQueryItem(name: "name", value: "Translate Screen")
+                        ]
+                        if let url = components?.url {
+                            openURL(url)
+                        }
+                    } label: {
+                        Label("Run “Translate Screen”", systemImage: "play.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            .navigationTitle("Add Shortcut")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
         }
     }
 }

@@ -13,6 +13,10 @@ struct TranslateCurrentScreenshotIntent: AppIntent {
     @Parameter(title: "Target Language", description: "Override the app's default target language. Leave blank to use Settings.")
     var targetLanguage: String?
 
+    static var parameterSummary: some ParameterSummary {
+        Summary("Translate \(\.$screenshot)")
+    }
+
     func perform() async throws -> some IntentResult & ReturnsValue<IntentFile> & ProvidesDialog {
         guard let image = UIImage(data: screenshot.data) else {
             throw TranslationError.unreadableImage
@@ -20,9 +24,10 @@ struct TranslateCurrentScreenshotIntent: AppIntent {
 
         var settings = AppSettings.fromDefaults()
         if let override = targetLanguage?.trimmingCharacters(in: .whitespacesAndNewlines), !override.isEmpty {
+            let resolvedLanguage = Self.resolveTargetLanguage(override)
             settings = AppSettings(
-                targetLanguage: override,
-                targetLanguageCode: settings.targetLanguageCode,
+                targetLanguage: resolvedLanguage.map { SupportedLanguage.promptName(forCode: $0.code) } ?? override,
+                targetLanguageCode: resolvedLanguage?.code ?? settings.targetLanguageCode,
                 endpoint: settings.endpoint,
                 model: settings.model,
                 ocrLanguages: settings.ocrLanguages,
@@ -46,6 +51,18 @@ struct TranslateCurrentScreenshotIntent: AppIntent {
             value: file,
             dialog: IntentDialog(stringLiteral: dialog)
         )
+    }
+
+    private static func resolveTargetLanguage(_ value: String) -> SupportedLanguage? {
+        let normalized = value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        return SupportedLanguage.all.first { language in
+            language.code.lowercased() == normalized
+                || language.displayName.lowercased() == normalized
+                || SupportedLanguage.promptName(forCode: language.code).lowercased() == normalized
+        }
     }
 
     private func processShortcutImage(_ image: UIImage, settings: AppSettings) async throws -> TranslationOutput {

@@ -36,8 +36,8 @@ final class SettingsStore: ObservableObject {
     }
 
     init() {
-        targetLanguage = UserDefaults.standard.string(forKey: Keys.targetLanguage) ?? "Chinese"
-        targetLanguageCode = UserDefaults.standard.string(forKey: Keys.targetLanguageCode) ?? "zh-Hans"
+        targetLanguage = UserDefaults.standard.string(forKey: Keys.targetLanguage) ?? "English"
+        targetLanguageCode = UserDefaults.standard.string(forKey: Keys.targetLanguageCode) ?? "en"
         endpoint = UserDefaults.standard.string(forKey: Keys.endpoint) ?? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
         model = UserDefaults.standard.string(forKey: Keys.model) ?? "gemini-2.5-flash"
         ocrLanguages = UserDefaults.standard.string(forKey: Keys.ocrLanguages) ?? "th-TH,zh-Hans,en-US,ja-JP,ko-KR"
@@ -45,7 +45,7 @@ final class SettingsStore: ObservableObject {
         let storedPreference = UserDefaults.standard.object(forKey: Keys.preferOnDeviceTranslation) as? Bool
         preferOnDeviceTranslation = storedPreference ?? true
         let storedUnderstood = UserDefaults.standard.string(forKey: Keys.understoodLanguages)
-        understoodLanguages = storedUnderstood ?? (UserDefaults.standard.string(forKey: Keys.targetLanguageCode) ?? "zh-Hans")
+        understoodLanguages = storedUnderstood ?? (UserDefaults.standard.string(forKey: Keys.targetLanguageCode) ?? "en")
     }
 
     func snapshot() -> AppSettings {
@@ -95,9 +95,9 @@ struct AppSettings: Sendable {
     let understoodLanguages: [String]
 
     static func fromDefaults() -> AppSettings {
-        let targetCode = UserDefaults.standard.string(forKey: Keys.targetLanguageCode) ?? "zh-Hans"
+        let targetCode = UserDefaults.standard.string(forKey: Keys.targetLanguageCode) ?? "en"
         return AppSettings(
-            targetLanguage: UserDefaults.standard.string(forKey: Keys.targetLanguage) ?? "Chinese",
+            targetLanguage: UserDefaults.standard.string(forKey: Keys.targetLanguage) ?? "English",
             targetLanguageCode: targetCode,
             endpoint: UserDefaults.standard.string(forKey: Keys.endpoint) ?? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
             model: UserDefaults.standard.string(forKey: Keys.model) ?? "gemini-2.5-flash",

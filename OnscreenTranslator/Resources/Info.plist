@@ -24,6 +24,10 @@
 	<string>$(GEMINI_API_KEY)</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>shortcuts</string>
+	</array>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Save translated screenshots back to your photo library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

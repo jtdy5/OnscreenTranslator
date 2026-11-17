@@ -30,6 +30,8 @@ targets:
         GeminiAPIKey: $(GEMINI_API_KEY)
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
+        LSApplicationQueriesSchemes:
+          - shortcuts
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.onscreentranslator

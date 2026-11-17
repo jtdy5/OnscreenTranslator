@@ -78,14 +78,22 @@ xcodegen generate
 
 ## Create the Shortcut
 
+On iPhone, open Onscreen Translator and tap **Add Shortcut**. The app opens
+the Shortcuts setup sheet, which contains the exact actions to add. Quick Look
+shows the translated image over the app or screen that triggered the Shortcut,
+so the original app stays open.
+
 Create a Shortcut named **Translate Screen** with these three actions:
 
 1. **Take Screenshot**
 2. **Translate Current Screenshot**
-   - Pass the screenshot from step 1 to **Screenshot**.
+   - In the action's **Screenshot** field, insert the **Screenshot** variable
+     produced by step 1 (do not leave it set to Choose or Ask).
+   - The Shortcuts action passes the image directly to Onscreen Translator.
    - Optionally choose a target language; leave it blank to use the app setting.
 3. **Quick Look**
-   - Pass the translated file from step 2 to Quick Look.
+   - In Quick Look's **Input** field, insert the **Translated File** output
+     from step 2.
 
 Then assign it to one of these triggers:
 
@@ -108,7 +116,7 @@ Korean OCR. You can change:
 
 | Setting | Default |
 | --- | --- |
-| Target language | Chinese (`zh-Hans`) |
+| Target language | English (`en`) |
 | Prefer on-device translation | Enabled |
 | Cloud endpoint | Gemini OpenAI-compatible endpoint |
 | Cloud model | `gemini-2.5-flash` |
