@@ -167,6 +167,14 @@ GitHub-hosted macOS runner. The resulting IPA is unsigned and must be signed
 with a valid certificate and provisioning profile before it can be installed
 on an iPhone.
 
+## Build an unsigned IPA with Codemagic
+
+The root `codemagic.yaml` configures Codemagic to build on pushes to `main`.
+Add the repository to Codemagic and enable its repository webhook to trigger
+the build automatically. Download `OnscreenTranslator-unsigned.ipa` from the
+build's **Artifacts** section. The IPA is unsigned and requires signing before
+it can be installed on an iPhone.
+
 ## Project structure
 
 ```text
